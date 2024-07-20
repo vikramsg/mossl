@@ -1,0 +1,12 @@
+[project]
+name = "ssl.mojo"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["Vikram <vikramsingh001@gmail.com>"]
+channels = ["conda-forge"]
+platforms = ["osx-64"]
+
+[tasks]
+
+[dependencies]
+requests = ">=2.32.3,<2.33"
