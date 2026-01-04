@@ -1,6 +1,6 @@
-from subprocess import run
 from sys import argv
 
+from subprocess import run
 import emberjson
 
 
@@ -37,7 +37,9 @@ fn main() raises:
         quint_cmd += " --seed " + seed
         quint_cmd += " " + spec
 
-        var test_cmd = "QUINT_TRACE_PATH=" + trace_path + " mojo run -I . " + test
+        var test_cmd = (
+            "QUINT_TRACE_PATH=" + trace_path + " mojo run -I . " + test
+        )
         var rm_cmd = "rm -f " + trace_path
 
         print("Running: " + quint_cmd)

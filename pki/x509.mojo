@@ -1,7 +1,9 @@
 """Minimal X.509 parser and verification helpers (Stage 4)."""
 from collections import List
 
-from pki.ecdsa_p256 import verify_ecdsa_p256
+from pki.ecdsa_p256 import verify_ecdsa_p256, verify_ecdsa_p256_hash
+
+from crypto.sha384 import sha384_bytes
 
 from pki.asn1 import (
     DerReader,
@@ -179,6 +181,19 @@ fn parse_certificate(cert_der: List[UInt8]) -> ParsedCertificate:
 
 fn hostname_matches(cert: ParsedCertificate, hostname: List[UInt8]) -> Bool:
     for san in cert.san_dns:
+        if len(san) >= 2 and san[0] == UInt8(0x2A) and san[1] == UInt8(0x2E):
+            # wildcard match: *.example.com
+            if len(hostname) >= len(san) - 1:
+                var i = 1
+                var same = True
+                var offset = len(hostname) - (len(san) - 1)
+                while i < len(san):
+                    if san[i] != hostname[offset + i - 1]:
+                        same = False
+                        break
+                    i += 1
+                if same:
+                    return True
         if len(san) == len(hostname):
             var i = 0
             var same = True
@@ -202,7 +217,7 @@ fn hostname_matches(cert: ParsedCertificate, hostname: List[UInt8]) -> Bool:
     return False
 
 
-struct TrustStore:
+struct TrustStore(Movable):
     var roots: List[List[UInt8]]
 
     fn __init__(out self):
@@ -222,9 +237,52 @@ fn verify_certificate_signature(cert: ParsedCertificate) -> Bool:
     oid_ecdsa_sha256.append(UInt8(0x04))
     oid_ecdsa_sha256.append(UInt8(0x03))
     oid_ecdsa_sha256.append(UInt8(0x02))
-    if not oid_equal(cert.signature_oid, oid_ecdsa_sha256):
-        return False
-    return verify_ecdsa_p256(cert.public_key, cert.tbs, cert.signature)
+    var oid_ecdsa_sha384 = List[UInt8]()
+    oid_ecdsa_sha384.append(UInt8(0x2A))
+    oid_ecdsa_sha384.append(UInt8(0x86))
+    oid_ecdsa_sha384.append(UInt8(0x48))
+    oid_ecdsa_sha384.append(UInt8(0xCE))
+    oid_ecdsa_sha384.append(UInt8(0x3D))
+    oid_ecdsa_sha384.append(UInt8(0x04))
+    oid_ecdsa_sha384.append(UInt8(0x03))
+    oid_ecdsa_sha384.append(UInt8(0x03))
+    if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
+        return verify_ecdsa_p256(cert.public_key, cert.tbs, cert.signature)
+    if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
+        return verify_ecdsa_p256_hash(
+            cert.public_key, sha384_bytes(cert.tbs), cert.signature
+        )
+    return False
+
+
+fn verify_signature_with_issuer(
+    cert: ParsedCertificate, issuer_pubkey: List[UInt8]
+) -> Bool:
+    var oid_ecdsa_sha256 = List[UInt8]()
+    oid_ecdsa_sha256.append(UInt8(0x2A))
+    oid_ecdsa_sha256.append(UInt8(0x86))
+    oid_ecdsa_sha256.append(UInt8(0x48))
+    oid_ecdsa_sha256.append(UInt8(0xCE))
+    oid_ecdsa_sha256.append(UInt8(0x3D))
+    oid_ecdsa_sha256.append(UInt8(0x04))
+    oid_ecdsa_sha256.append(UInt8(0x03))
+    oid_ecdsa_sha256.append(UInt8(0x02))
+    var oid_ecdsa_sha384 = List[UInt8]()
+    oid_ecdsa_sha384.append(UInt8(0x2A))
+    oid_ecdsa_sha384.append(UInt8(0x86))
+    oid_ecdsa_sha384.append(UInt8(0x48))
+    oid_ecdsa_sha384.append(UInt8(0xCE))
+    oid_ecdsa_sha384.append(UInt8(0x3D))
+    oid_ecdsa_sha384.append(UInt8(0x04))
+    oid_ecdsa_sha384.append(UInt8(0x03))
+    oid_ecdsa_sha384.append(UInt8(0x03))
+    if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
+        return verify_ecdsa_p256(issuer_pubkey, cert.tbs, cert.signature)
+    if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
+        return verify_ecdsa_p256_hash(
+            issuer_pubkey, sha384_bytes(cert.tbs), cert.signature
+        )
+    return False
 
 
 fn verify_chain(
@@ -245,7 +303,7 @@ fn verify_chain(
             if not bytes_equal(leaf.issuer_cn, root.subject_cn):
                 i += 1
                 continue
-        if verify_ecdsa_p256(root.public_key, leaf.tbs, leaf.signature):
+        if verify_signature_with_issuer(leaf, root.public_key):
             return True
         i += 1
     return False

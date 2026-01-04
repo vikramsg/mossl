@@ -556,3 +556,29 @@ fn aes_gcm_seal(
     var s = ghash(h, aad, ciphertext)
     var tag = gctr(key, j0, s)
     return (ciphertext^, tag^)
+
+
+fn aes_gcm_open(
+    key: List[UInt8],
+    iv: List[UInt8],
+    aad: List[UInt8],
+    ciphertext: List[UInt8],
+    tag: List[UInt8],
+) -> (List[UInt8], Bool):
+    var zero_block: List[UInt8] = [UInt8(0) for _ in range(16)]
+    var h = aes_encrypt_block(key, zero_block)
+    var j0 = derive_j0(h, iv)
+    var s = ghash(h, aad, ciphertext)
+    var expected = gctr(key, j0, s)
+    if len(expected) != len(tag):
+        return (List[UInt8](), False)
+    var i = 0
+    var same = True
+    while i < len(tag):
+        if expected[i] != tag[i]:
+            same = False
+        i += 1
+    if not same:
+        return (List[UInt8](), False)
+    var plaintext = gctr(key, inc32(j0), ciphertext)
+    return (plaintext^, True)

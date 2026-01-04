@@ -4,8 +4,8 @@
 Implement a **pure Mojo** TLS 1.3 client stack sufficient to perform HTTPS GETs via `lightbug_http`.
 
 ## Status
-- Stage 1 (SHA-256 / HMAC-SHA256 / HKDF): **implemented and tested**
-- Stages 0, 2–5: **pending** (see `docs/spec.md`)
+- TLS 1.3 MVP client implemented with **real HTTPS GET** support.
+- Current limits: single cipher suite (`TLS_AES_128_GCM_SHA256`), X25519, ECDSA P‑256 (SHA‑256/SHA‑384), no ALPN/session resumption.
 
 ## Layout
 ```
@@ -16,13 +16,43 @@ tests/           Mojo tests (test_*.mojo)
 scripts/         Usage scripts
 ```
 
+## TLS HTTPS Architecture
+```
+lightbug_http
+  |
+  v
+tls/https_client.mojo   (adapter: read/write/close for lightbug_http)
+  |
+  v
+tls/connect_https.mojo  (TCP connect + TLS handshake)
+  |
+  v
+tls/tls_socket.mojo     (handshake gating + app data I/O)
+  |
+  v
+tls/tls13.mojo          (TLS 1.3 client: records, key schedule, cert verify)
+  |            \
+  |             \--> crypto/* (sha256, sha384, hmac, hkdf, x25519, aes_gcm)
+  |
+  \--> pki/* (asn1, x509, ecdsa_p256, trust_store, bigint256)
+```
+
 ## Commands
 ```
-# Run Stage 1 Mojo tests (grouped)
-pixi run test-stage1
-
 # Run Stage 1 Quint spec tests
 pixi run test-specs
+
+# Run crypto tests
+pixi run test-crypto
+
+# Run PKI tests
+pixi run test-pki
+
+# Run TLS tests
+pixi run test-tls
+
+# Run real HTTPS GET test
+pixi run test-https
 
 # Run all trace-based spec/implementation tests via the trace runner
 pixi run test-trace
