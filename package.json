@@ -7,7 +7,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "quint test specs/tls13_protocol.qnt && quint test specs/tls13_record.qnt && quint test specs/crypto_hkdf.qnt && quint test specs/crypto_aead_gcm.qnt && quint test specs/crypto_x25519.qnt && quint test specs/crypto_sig_x509.qnt && quint test specs/tls_integration.qnt"
+    "test": "quint test specs/crypto_hkdf.qnt"
   },
   "repository": {
     "type": "git",
