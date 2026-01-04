@@ -2,14 +2,15 @@
 name = "ssl.mojo"
 version = "0.1.0"
 description = "Add a short description here"
-authors = ["Vikram <vikramsingh001@gmail.com>"]
+authors = ["vikramsg"]
 channels = ["conda-forge", "https://conda.modular.com/max", "https://repo.prefix.dev/modular-community"]
 platforms = ["linux-aarch64", "osx-arm64"]
 
 [tasks]
+test-specs = "npx quint test specs/crypto_sha256.qnt && npx quint test specs/crypto_hmac.qnt && npx quint test specs/crypto_hkdf.qnt"
+test-stage1 = "mojo run -I . tests/test_sha256.mojo && mojo run -I . tests/test_hmac.mojo && mojo run -I . tests/test_hkdf.mojo"
+test-all = { depends-on = ["test-specs", "test-stage1"] }
 
 [dependencies]
-# lightbug_http 0.25.7 does not seem to work
 mojo = ">=0.25.6,<0.26"
 lightbug_http = ">=0.25.6,<0.25.8"
-requests = ">=2.32.5,<3"

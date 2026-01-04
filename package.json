@@ -1,0 +1,27 @@
+{
+  "name": "ssl.mojo",
+  "version": "1.0.0",
+  "description": "The objective is to implement enough OpenSSL bindings to allow `HTTPS` connections.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "quint test specs/crypto_hkdf.qnt"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vikramsg/ssl.mojo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/vikramsg/ssl.mojo/issues"
+  },
+  "homepage": "https://github.com/vikramsg/ssl.mojo#readme",
+  "devDependencies": {
+    "@informalsystems/quint": "^0.29.1"
+  }
+}
