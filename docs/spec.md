@@ -1,4 +1,5 @@
 # HTTPS GET Enablement Spec (Mojo-Native TLS Plan)
+
 **PURE MOJO ONLY**: All implementations must be in Mojo; no Python or external language bindings.
 
 ## Roadmap for `MojoTLS` (Secure MVP, Native Implementation)
@@ -67,7 +68,7 @@ TCP Socket
 ## Implementation and Test Guidance
 
 ### Code Layout
-- **Mojo implementation** lives under `src/` (e.g., `src/tls/`, `src/crypto/`, `src/pki/`).
+- **Mojo implementation** lives under `crypto/` for Stage 1; later stages will add `tls/` and `pki/` at repo root.
 - **Mojo tests** live under `tests/` and use `test_*` naming (e.g., `tests/test_hkdf.mojo`).
 - **Quint specs** live under `specs/` and include stage-specific tests.
 
@@ -84,7 +85,7 @@ TCP Socket
 | Stage | Spec tests added | Mojo tests added | All tests up to stage pass |
 | --- | --- | --- | --- |
 | Stage 0: Protocol Skeleton | [ ] | [ ] | [ ] |
-| Stage 1: Hash/MAC/KDF | [ ] | [ ] | [ ] |
+| Stage 1: Hash/MAC/KDF | [x] | [x] | [x] |
 | Stage 2: Key Exchange | [ ] | [ ] | [ ] |
 | Stage 3: Record Layer AEAD | [ ] | [ ] | [ ] |
 | Stage 4: Certificates and Signatures | [ ] | [ ] | [ ] |
