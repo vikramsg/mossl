@@ -7,7 +7,7 @@ from tls.https_client import HTTPSClient
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
 
 
-fn test_https_get() raises:
+fn test_https_get_example_com() raises:
     var client = HTTPSClient()
     var uri = URI.parse("https://example.com/")
     var req = HTTPRequest(uri)
@@ -17,5 +17,27 @@ fn test_https_get() raises:
     assert_equal("Example Domain" in body, True)
 
 
+fn test_https_get_example_net() raises:
+    var client = HTTPSClient()
+    var uri = URI.parse("https://example.net/")
+    var req = HTTPRequest(uri)
+    var res = client.do(req^)
+    assert_equal(res.status_code, 200)
+    var body = to_string(res.body_raw.copy())
+    assert_equal("Example Domain" in body, True)
+
+
+fn test_https_get_example_org() raises:
+    var client = HTTPSClient()
+    var uri = URI.parse("https://example.org/")
+    var req = HTTPRequest(uri)
+    var res = client.do(req^)
+    assert_equal(res.status_code, 200)
+    var body = to_string(res.body_raw.copy())
+    assert_equal("Example Domain" in body, True)
+
+
 fn main() raises:
-    test_https_get()
+    test_https_get_example_com()
+    test_https_get_example_net()
+    test_https_get_example_org()

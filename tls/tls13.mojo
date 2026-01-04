@@ -538,7 +538,6 @@ struct TLS13Client[T: TLSTransport](Movable):
     fn read_record(mut self) raises -> (UInt8, List[UInt8]):
         var header = read_exact(self.transport, 5)
         var content_type = header[0]
-        _ = (UInt16(header[1]) << 8) | UInt16(header[2])
         var length = Int(bytes_to_u16(header, 3))
         var payload = read_exact(self.transport, length)
         return (content_type, payload^)
@@ -576,8 +575,21 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.send_handshake(ch_msg, False)
 
         var rec = self.read_record()
+        if rec[0] == CONTENT_ALERT:
+            var level = rec[1][0]
+            var desc = rec[1][1]
+            raise Error(
+                "TLS handshake: received alert "
+                + String(desc)
+                + " (level "
+                + String(level)
+                + ")"
+            )
         if rec[0] != CONTENT_HANDSHAKE:
-            raise Error("TLS handshake: expected ServerHello record")
+            raise Error(
+                "TLS handshake: expected ServerHello record, got "
+                + String(rec[0])
+            )
         var cursor = ByteCursor(rec[1])
         var msg_type = cursor.read_u8()
         if msg_type != HS_SERVER_HELLO:

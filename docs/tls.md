@@ -1,8 +1,6 @@
 # TLS Implementation Notes (Mojo)
 
-This document explains **what each TLS module is**, **why design choices were made**, and how the pieces are intended to fit together as the real TLS 1.3 stack is completed.
-
-It is intentionally opinionated: each choice lists the motivation so future work stays consistent and traceable.
+This document explains **what each TLS module is**, **why design choices were made**, and how the pieces fit together in the current TLS 1.3 client implementation.
 
 ---
 
@@ -14,7 +12,7 @@ It is intentionally opinionated: each choice lists the motivation so future work
 - Encode security‑critical invariants (gating, ordering, domain separation) in specs and mirror them in Mojo tests.
 
 **Non‑Goals (for now)**
-- Full TLS feature coverage (e.g., RSA, TLS 1.2, OCSP stapling, ALPN negotiation).
+- Full TLS feature coverage (e.g., RSA, TLS 1.2, OCSP stapling, ALPN negotiation, client auth, session resumption).
 - Highly optimized crypto (correctness first; optimize later).
 
 ---
@@ -23,6 +21,8 @@ It is intentionally opinionated: each choice lists the motivation so future work
 
 ```
 TLS
+├─ tls/https_client.mojo
+│   └─ Adapter for lightbug_http (Connection-like API on top of TLSSocket)
 ├─ tls/handshake.mojo
 │   └─ Handshake state machine and ordering gates
 ├─ tls/record_layer.mojo
@@ -30,9 +30,14 @@ TLS
 ├─ tls/tls_socket.mojo
 │   └─ Connection wrapper that enforces handshake gating
 ├─ tls/connect_https.mojo
-│   └─ Connect + handshake (placeholder until real TLS I/O)
+│   └─ Connect + real TLS 1.3 handshake
+├─ tls/tls13.mojo
+│   └─ TLS 1.3 client: record I/O, key schedule, cert verification
+├─ tls/transport.mojo
+│   └─ Transport trait for plugging sockets into TLS13Client
 ├─ crypto/
 │   ├─ sha256.mojo, hmac.mojo, hkdf.mojo
+│   ├─ sha384.mojo
 │   ├─ x25519.mojo
 │   └─ aes_gcm.mojo
 └─ pki/
@@ -47,7 +52,7 @@ TLS
 ## Module Details and Design Rationale
 
 ### `tls/handshake.mojo`
-**What it is:** A state machine for the TLS 1.3 handshake flow, currently with abstracted crypto gates.
+**What it is:** A state machine for the TLS 1.3 handshake flow and ordering gates.
 
 **Why this choice:**
 - A state machine makes **ordering constraints explicit** and testable (e.g., no application data before Finished).
@@ -55,7 +60,7 @@ TLS
 
 **What it enables:**
 - Gated I/O in `TLSSocket` (no read/write until handshake complete).
-- A clear place to insert real ClientHello/ServerHello parsing and verification later.
+- A clear place to validate handshake ordering and transcript progression.
 
 ---
 
@@ -79,8 +84,8 @@ TLS
 - `lightbug_http` expects a connection-like API (read/write/close). Encapsulating the TLS gate here keeps the client code simple.
 - The wrapper is a natural place to eventually perform record encryption/decryption transparently.
 
-**Current limitation:**
-- The wrapper is **gating-only** right now; it does not encrypt data yet.
+**Current behavior:**
+- Uses `TLS13Client` for record encryption/decryption once the handshake completes.
 
 ---
 
@@ -91,12 +96,26 @@ TLS
 - Centralizes connection setup and handshake sequencing.
 - Makes future refactors easy: when the handshake becomes real, only this module needs to change.
 
-**Current limitation:**
-- Performs only the **abstract handshake**; no real TLS record I/O.
+**Current behavior:**
+- Performs a real TLS 1.3 handshake and returns a ready `TLSSocket`.
 
 ---
 
-### `crypto/sha256.mojo`, `crypto/hmac.mojo`, `crypto/hkdf.mojo`
+### `tls/tls13.mojo`
+**What it is:** The TLS 1.3 client implementation: ClientHello construction, key schedule, record protection, and certificate verification.
+
+**Why this choice:**
+- Keeps the protocol logic and cryptographic wiring in one place, while the connection wrapper (`TLSSocket`) stays thin.
+- Limits scope to a **single cipher suite** for MVP correctness and testability.
+
+**Current capability:**
+- Cipher suite: `TLS_AES_128_GCM_SHA256`.
+- Key exchange: `X25519`.
+- Certificate verification: ECDSA P‑256 with SHA‑256 or SHA‑384.
+
+---
+
+### `crypto/sha256.mojo`, `crypto/sha384.mojo`, `crypto/hmac.mojo`, `crypto/hkdf.mojo`
 **What they are:** Hash, MAC, and KDF primitives for the TLS 1.3 key schedule.
 
 **Why these choices:**
@@ -159,11 +178,11 @@ TLS
 
 ---
 
-## Why the Current `lightbug_http` Wiring Is Not Plug‑and‑Play
+## lightbug_http Integration
 
-**Key constraint:** `lightbug_http` is hard‑typed to `TCPConnection` in the client and response parser. This prevents swapping in a TLS connection without modifying `lightbug_http` types.
-
-**Implication:** Stage 5 **cannot be fully completed** (including the https test) until `lightbug_http` is generalized to accept a `Connection` trait (or similar) and a TLS implementation of that trait.
+`tls/https_client.mojo` provides a small adapter that satisfies the
+`lightbug_http` connection interface without changing upstream code. This keeps
+TLS support local to this repo and avoids upstream API changes.
 
 ---
 
@@ -173,11 +192,28 @@ TLS
 - Every spec is mirrored by **Mojo tests** using known vectors or constrained paths.
 - The goal is to fail early and locally when invariants are violated.
 
+## Tests and Commands
+
+TLS tests:
+```
+pixi run test-tls
+```
+
+Real HTTPS GET test:
+```
+pixi run test-https
+```
+
+Run everything:
+```
+pixi run test-all
+```
+
 ---
 
 ## Future Work Checklist (Implementation-Ready)
 
-- Replace abstract handshake transitions with **real ClientHello/ServerHello** and key schedule derivations.
-- Integrate record encryption in `TLSSocket` so reads/writes are transparently protected.
-- Generalize `lightbug_http` to accept a TLS‑capable connection type.
-- Add a real HTTPS test (`https://httpbin.org/get`) once the above is in place.
+- Add more cipher suites and signature algorithms (RSA, P‑384).
+- Implement ALPN and SNI extensions beyond the current minimal set.
+- Implement session resumption and key updates.
+- Expand test coverage for SHA‑384 and additional cert chains.
