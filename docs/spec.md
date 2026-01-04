@@ -85,7 +85,7 @@ TCP Socket
 
 | Stage | Spec tests added | Mojo tests added | All tests up to stage pass |
 | --- | --- | --- | --- |
-| Stage 0: Protocol Skeleton | [ ] | [ ] | [ ] |
+| Stage 0: Protocol Skeleton | [x] | [x] | [x] |
 | Stage 1: Hash/MAC/KDF | [x] | [x] | [x] |
 | Stage 2: Key Exchange | [x] | [x] | [x] |
 | Stage 3: Record Layer AEAD | [x] | [x] | [x] |
