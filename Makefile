@@ -32,6 +32,9 @@ test-trace:
 test-all:
 	$(TEST_ALL)
 
+format:
+	pixi run format
+
 # Git worktree commands
 # Usage:
 #   make worktree-add <branch>

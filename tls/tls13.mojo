@@ -5,7 +5,7 @@ from lightbug_http.address import TCPAddr
 from lightbug_http.io.bytes import Bytes
 from memory import Span
 from pki.ecdsa_p256 import verify_ecdsa_p256_hash
-from pki.trust_store import load_e7_trust_store
+from pki.trust_store import load_trust_store
 from pki.x509 import parse_certificate, verify_chain
 
 from crypto.aes_gcm import aes_gcm_seal, aes_gcm_open
@@ -742,7 +742,7 @@ struct TLS13Client[T: TLSTransport](Movable):
                         var cert_der = list_cur.read_bytes(cert_len)
                         var parsed = parse_certificate(cert_der)
                         self.server_pubkey = parsed.public_key.copy()
-                        var trust = load_e7_trust_store()
+                        var trust = load_trust_store()
                         var host_bytes = string_to_bytes(self.host)
                         if not verify_chain(cert_der, trust, host_bytes):
                             raise Error(
