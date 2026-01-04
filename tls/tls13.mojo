@@ -859,4 +859,3 @@ struct TLS13Client[T: TLSTransport](Movable):
             self.app_seq_in += UInt64(1)
             if dec[1] == CONTENT_APPDATA:
                 return dec[0].copy()
-        return List[UInt8]()

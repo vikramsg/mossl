@@ -5,10 +5,11 @@ TEST_SPECS := pixi run test-specs
 TEST_CRYPTO := pixi run test-crypto
 TEST_TLS := pixi run test-tls
 TEST_PKI := pixi run test-pki
+TEST_HTTPS := pixi run test-https
 TEST_TRACE := pixi run test-trace
 TEST_ALL := pixi run test-all
 
-.PHONY: test-specs test-crypto test-tls test-pki test-trace test-all
+.PHONY: test-specs test-crypto test-tls test-pki test-https test-trace test-all
 
 test-specs:
 	$(TEST_SPECS)
@@ -21,6 +22,9 @@ test-tls:
 
 test-pki:
 	$(TEST_PKI)
+
+test-https:
+	$(TEST_HTTPS)
 
 test-trace:
 	$(TEST_TRACE)

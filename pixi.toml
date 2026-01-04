@@ -11,9 +11,10 @@ format = "mojo run scripts/sort_imports.mojo . && mojo format ."
 test-specs = "npx quint test specs/crypto_sha256.qnt && npx quint test specs/crypto_hmac.qnt && npx quint test specs/crypto_hkdf.qnt && npx quint test specs/crypto_x25519.qnt && npx quint test specs/crypto_aead.qnt && npx quint test specs/tls_record.qnt && npx quint test specs/tls_handshake.qnt && npx quint test specs/tls_http_gating.qnt && npx quint test specs/pki_chain.qnt"
 test-crypto = "mojo run -I . tests/test_sha256.mojo && mojo run -I . tests/test_hmac.mojo && mojo run -I . tests/test_hkdf.mojo && mojo run -I . tests/test_x25519.mojo && mojo run -I . tests/test_aes_gcm.mojo"
 test-pki = "mojo run -I . tests/test_pki.mojo"
-test-tls = "mojo run -I . tests/test_record_layer.mojo && mojo run -I . tests/test_handshake.mojo && mojo run -I . tests/test_tls_socket.mojo && mojo run -I . tests/test_tls13_rfc8448_kdf.mojo && mojo run -I . tests/test_tls13_rfc8448_record.mojo && mojo run -I . tests/test_https_get.mojo"
+test-tls = "mojo run -I . tests/test_record_layer.mojo && mojo run -I . tests/test_handshake.mojo && mojo run -I . tests/test_tls_socket.mojo && mojo run -I . tests/test_tls13_rfc8448_kdf.mojo && mojo run -I . tests/test_tls13_rfc8448_record.mojo"
+test-https = "mojo run -I . tests/test_https_get.mojo"
 test-trace = "mojo run -I . scripts/trace_runner.mojo tests/trace_config.json"
-test-all = { depends-on = ["test-specs", "test-crypto", "test-pki", "test-tls", "test-trace"] }
+test-all = { depends-on = ["test-specs", "test-crypto", "test-pki", "test-tls", "test-https", "test-trace"] }
 
 [dependencies]
 mojo = ">=0.25.6,<0.26"

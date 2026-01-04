@@ -10,7 +10,7 @@ from tls.tls13 import TLS13Client
 from tls.transport import TLSTransport
 
 
-struct SocketTransport(TLSTransport):
+struct SocketTransport(Movable, TLSTransport):
     var socket: Socket[TCPAddr]
 
     fn __init__(out self, var socket: Socket[TCPAddr]):
@@ -38,7 +38,7 @@ struct SocketTransport(TLSTransport):
         return self.socket.remote_address()
 
 
-struct NullTransport(TLSTransport):
+struct NullTransport(Movable, TLSTransport):
     var local: TCPAddr
     var remote: TCPAddr
 

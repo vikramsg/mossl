@@ -84,13 +84,15 @@ fn point_infinity() -> ECPoint:
     zero.append(UInt64(0))
     zero.append(UInt64(0))
     zero.append(UInt64(0))
-    return ECPoint(zero, zero.copy(), True)
+    var zero_y = zero.copy()
+    return ECPoint(zero^, zero_y^, True)
 
 
 fn jacobian_infinity() -> JacobianPoint:
     var zero = u256_const(UInt64(0))
     var one = u256_const(UInt64(1))
-    return JacobianPoint(zero.copy(), one, zero, True)
+    var x = zero.copy()
+    return JacobianPoint(x^, one^, zero^, True)
 
 
 fn jacobian_from_affine(p: ECPoint) -> JacobianPoint:
@@ -101,7 +103,7 @@ fn jacobian_from_affine(p: ECPoint) -> JacobianPoint:
     one.append(UInt64(0))
     one.append(UInt64(0))
     one.append(UInt64(0))
-    return JacobianPoint(p.x.copy(), p.y.copy(), one, False)
+    return JacobianPoint(p.x.copy(), p.y.copy(), one^, False)
 
 
 fn jacobian_to_affine(p: JacobianPoint) -> ECPoint:
@@ -112,7 +114,7 @@ fn jacobian_to_affine(p: JacobianPoint) -> ECPoint:
     var z2 = mod_mul(z_inv, z_inv, mod)
     var x = mod_mul(p.x, z2, mod)
     var y = mod_mul(p.y, mod_mul(z2, z_inv, mod), mod)
-    return ECPoint(x, y, False)
+    return ECPoint(x^, y^, False)
 
 
 fn jacobian_double(p: JacobianPoint) -> JacobianPoint:
@@ -150,7 +152,7 @@ fn jacobian_double(p: JacobianPoint) -> JacobianPoint:
         mod,
     )
     var z3 = mod_mul(two, mod_mul(p.y, p.z, mod), mod)
-    return JacobianPoint(x3, y3, z3, False)
+    return JacobianPoint(x3^, y3^, z3^, False)
 
 
 fn jacobian_add(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint:
@@ -182,7 +184,7 @@ fn jacobian_add(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint:
         mod_mul(r, sub_mod(u1h2, x3, mod), mod), mod_mul(s1, h3, mod), mod
     )
     var z3 = mod_mul(h, mod_mul(p.z, q.z, mod), mod)
-    return JacobianPoint(x3, y3, z3, False)
+    return JacobianPoint(x3^, y3^, z3^, False)
 
 
 fn point_add(p: ECPoint, q: ECPoint) -> ECPoint:
@@ -201,7 +203,7 @@ fn point_add(p: ECPoint, q: ECPoint) -> ECPoint:
     var lam = mod_mul(y_diff, mod_inv(x_diff, mod), mod)
     var x3 = sub_mod(sub_mod(mod_mul(lam, lam, mod), p.x, mod), q.x, mod)
     var y3 = sub_mod(mod_mul(lam, sub_mod(p.x, x3, mod), mod), p.y, mod)
-    return ECPoint(x3, y3, False)
+    return ECPoint(x3^, y3^, False)
 
 
 fn point_double(p: ECPoint) -> ECPoint:
@@ -226,7 +228,7 @@ fn point_double(p: ECPoint) -> ECPoint:
     var lam = mod_mul(num, mod_inv(den, mod), mod)
     var x3 = sub_mod(mod_mul(lam, lam, mod), mod_mul(two, p.x, mod), mod)
     var y3 = sub_mod(mod_mul(lam, sub_mod(p.x, x3, mod), mod), p.y, mod)
-    return ECPoint(x3, y3, False)
+    return ECPoint(x3^, y3^, False)
 
 
 fn scalar_mul(k: List[UInt64], p: ECPoint) -> ECPoint:
@@ -281,7 +283,7 @@ fn verify_ecdsa_p256_hash(
         while i < 32:
             truncated.append(digest[i])
             i += 1
-        digest = truncated
+        digest = truncated^
     var e = u256_from_be(digest)
     var w = mod_inv(s, n)
     var u1 = mod_mul(e, w, n)

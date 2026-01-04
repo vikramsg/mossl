@@ -49,7 +49,7 @@ fn _read_until_eof(mut conn: TLSConnectionAdapter) raises -> Bytes:
     var out = Bytes()
     var buff = Bytes(capacity=default_buffer_size)
     while True:
-        var n = UInt(0)
+        var n: UInt
         try:
             n = conn.read(buff)
         except e:
@@ -70,7 +70,7 @@ fn _read_min_bytes(
         return out^
     var buff = Bytes(capacity=default_buffer_size)
     while len(out) < min_bytes:
-        var n = UInt(0)
+        var n: UInt
         try:
             n = conn.read(buff)
         except e:
