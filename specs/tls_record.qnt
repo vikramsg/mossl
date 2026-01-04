@@ -1,5 +1,7 @@
 // Purpose: TLS record-layer nonce/sequence contracts.
 module tls_record {
+  // NOTE: Minimal spec for trace-wiring only (sequence increments).
+  // TODO: Add nonce derivation (iv XOR 0^32||seq), AEAD inputs/outputs, and record framing/content type rules.
   // --- State ---
   var sequence: int
 

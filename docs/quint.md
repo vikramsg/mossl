@@ -51,6 +51,11 @@ Runs are used for simulation. They define a sequence of actions (a "trace") to v
 ```quint
 run HappyPath = Init.then(Authenticate)
 ```
+Notes for simulation:
+- `--max-steps` only limits trace length; it does not pick a specific scenario.
+- Without `--run`, the simulator can choose any enabled action; traces can vary if there are multiple actions.
+- For deterministic tests, also set `--max-samples 1` and a fixed `--seed`.
+- Use `--run` when you need a specific path rather than "any valid path".
 
 ## 3. Creating a Specification
 
@@ -67,9 +72,8 @@ In `ssl.mojo`, we follow these steps:
 1.  **Model**: Write the protocol logic in `.qnt` files in the `specs/` directory.
 2.  **Verify**: Use the Quint CLI to simulate the spec:
     ```bash
-    quint run specs/tls13_protocol.qnt
+    quint run --max-steps 25 --max-samples 1 --seed 1 specs/tls13_protocol.qnt
     ```
 3.  **Check**: Use the Apalache model checker (via Quint) to prove invariants hold for all possible execution paths.
 4.  **Implement**: Use the verified Quint spec as a "Golden Model" for the Mojo implementation in `src/`. The logic in `src/tls/handshake.mojo` should directly reflect the transitions defined in `specs/tls13_protocol.qnt`.
 5.  **Test**: Generate test vectors from Quint traces to verify the Mojo implementation behaves exactly like the specification.
-

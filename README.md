@@ -24,9 +24,20 @@ pixi run test-stage1
 # Run Stage 1 Quint spec tests
 pixi run test-specs
 
+# Run all trace-based spec/implementation tests via the trace runner
+pixi run test-trace
+
 # Run everything tracked in pixi.toml
 pixi run test-all
 ```
+
+## Trace Runner
+The trace runner (`scripts/trace_runner.mojo`) reads a JSON config and executes
+Quint traces plus their corresponding Mojo implementation tests.
+
+- Config: `tests/trace_config.json`
+- Run: `pixi run test-trace`
+- Override config: `mojo run -I . scripts/trace_runner.mojo path/to/config.json`
 
 ## Testing Note (Mojo 0.25.6)
 Mojo 0.25.6 does **not** include the `TestSuite` test runner, so tests run via

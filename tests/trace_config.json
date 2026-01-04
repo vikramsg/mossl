@@ -1,0 +1,17 @@
+{
+  "max_steps": "25",
+  "max_samples": "1",
+  "seed": "1",
+  "cases": [
+    {
+      "name": "tls_record",
+      "spec": "specs/tls_record.qnt",
+      "test": "tests/test_tls_record_trace.mojo"
+    },
+    {
+      "name": "tls_handshake",
+      "spec": "specs/tls_handshake.qnt",
+      "test": "tests/test_tls_handshake_trace.mojo"
+    }
+  ]
+}

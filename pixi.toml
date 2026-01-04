@@ -11,10 +11,10 @@ format = "mojo run scripts/sort_imports.mojo . && mojo format ."
 test-specs = "npx quint test specs/crypto_sha256.qnt && npx quint test specs/crypto_hmac.qnt && npx quint test specs/crypto_hkdf.qnt && npx quint test specs/crypto_x25519.qnt && npx quint test specs/crypto_aead.qnt && npx quint test specs/tls_record.qnt"
 test-crypto = "mojo run -I . tests/test_sha256.mojo && mojo run -I . tests/test_hmac.mojo && mojo run -I . tests/test_hkdf.mojo && mojo run -I . tests/test_x25519.mojo && mojo run -I . tests/test_aes_gcm.mojo "
 test-tls = "mojo run -I . tests/test_record_layer.mojo"
-test-trace = { cmd = "TRACE_FILE=$(mktemp /tmp/quint_trace.XXXXXX.json) && npx quint run --out-itf $TRACE_FILE specs/tls_record.qnt && QUINT_TRACE_PATH=$TRACE_FILE mojo run -I . tests/test_tls_record_trace.mojo && rm $TRACE_FILE" }
+test-trace = "mojo run -I . scripts/trace_runner.mojo tests/trace_config.json"
 test-all = { depends-on = ["test-specs", "test-crypto", "test-tls", "test-trace"] }
 
 [dependencies]
 mojo = ">=0.25.6,<0.26"
-lightbug_http = ">=0.25.6,<0.25.8"
+lightbug_http = ">=0.25.6,<0.26"
 emberjson = ">=0.2.0"
