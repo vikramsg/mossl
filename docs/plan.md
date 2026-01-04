@@ -1,57 +1,42 @@
-# Plan: Dynamic Trust Store Support
+# Plan: Universal HTTPS Certificate Support (RSA & P-384)
 
-This document outlines the implementation plan to transition `ssl.mojo` from a hardcoded trust store to a dynamic one capable of loading certificates from system files or bundles.
+This document outlines the implementation plan to resolve all certificate verification failures in `docs/failing.md` by adding support for RSA and NIST P-384 signatures.
 
 ## Objective
-Enable `HTTPSClient` to load and use standard certificate bundles (like `ca-certificates.crt`), resolving failures caused by the current limited, hardcoded certificate set.
+Enable `HTTPSClient` to successfully connect to all major sites (Google, Wikipedia, GitHub, etc.) by implementing the missing cryptographic primitives required for their certificate chains.
 
-## Implementation Strategy: Spec-Driven Development
-Every component will follow a **Spec-First** approach:
-1.  **Define Spec**: Write a Quint specification (`specs/*.qnt`) defining the behavior (e.g., Base64 encoding/decoding invariants).
-2.  **Generate Trace**: Use `quint run` to generate ITF trace files.
-3.  **Mojo Trace Test**: Implement a Mojo test (`tests/test_*_trace.mojo`) that verifies the implementation against the ITF trace.
-4.  **Vector Tests**: Supplement with standard test vectors in `tests/test_*.mojo`.
+## Evidence & Requirements
+Analysis via `openssl s_client` confirms:
+- **RSA Roots/Intermediates:** 100% of analyzed failing sites use RSA for their trust anchors.
+- **P-384 Leaves:** Wikipedia, LetsEncrypt, and DigitalOcean use NIST P-384 leaf certificates.
+- **Handshake Advertisement:** Sites like Microsoft and Apple reject our `ClientHello` because we do not advertise RSA support in the `signature_algorithms` extension.
 
 ## Implementation Steps
 
-### 1. Base64 Decoding (`crypto/base64.mojo`)
-- **Spec**: Create `specs/crypto_base64.qnt`.
-- **Trace Test**: Create `tests/test_base64_trace.mojo`.
-- **Vector Tests**: Create `tests/test_base64.mojo` with RFC 4648 vectors.
-- **Implementation**: Robust decoder that handles padding and ignores non-alphabet characters.
+### 1. Multi-Precision BigInt (`pki/bigint.mojo`)
+RSA requires 2048-bit or 4096-bit integer math, far exceeding the current 256-bit limit.
+- **Spec**: `specs/bigint_pow.qnt` for modular exponentiation invariants.
+- **Implementation**: Flexible `BigInt` struct with limb-based storage. Implement Montgomery multiplication for efficient $s^e \pmod n$ operations.
+- **Verification**: Mojo trace test against Quint and vector tests for large prime modulus math.
 
-### 2. PEM Parsing (`pki/pem.mojo`)
-- **Spec**: Create `specs/pki_pem.qnt`.
-- **Trace Test**: Create `tests/test_pem_trace.mojo`.
-- **Vector Tests**: Create `tests/test_pem.mojo`.
-- **Implementation**: Logic to scan and extract content between markers.
+### 2. RSA Verification (`pki/rsa.mojo`)
+- **Spec**: `specs/crypto_rsa.qnt` for PKCS#1 v1.5 padding verification.
+- **Implementation**: RSASSA-PKCS1-v1_5 verifier.
+- **Integration**: Update `pki/x509.mojo` to recognize RSA OIDs and delegate to the new verifier.
+- **Verification**: Test vectors from RFC 8017.
 
-### 3. TrustStore Loading (`pki/x509.mojo`)
-- **Test First**: Create `tests/test_trust_store_load.mojo` that writes a temporary PEM file and verifies the `TrustStore` contains the expected number of certificates.
-- **Implementation**: `load_from_file` and system path discovery logic.
+### 3. P-384 Elliptic Curve (`pki/ecdsa_p384.mojo`)
+- **Spec**: `specs/crypto_p384.qnt` for curve arithmetic.
+- **Implementation**: NIST P-384 curve parameters and point multiplication.
+- **Verification**: NIST/RFC test vectors for P-384 signatures.
 
-### 4. Integration
-Update `tls/connect_https.mojo` or `pki/trust_store.mojo` to optionally load the system store instead of (or in addition to) the pinned MVP certificates.
-
----
-
-## Checklist
-
-- [ ] **Base64 Infrastructure**
-    - [ ] Create `crypto/base64.mojo`.
-    - [ ] Implement `decode` function.
-    - [ ] Add verification tests.
-- [ ] **PEM Parser**
-    - [ ] Create `pki/pem.mojo`.
-    - [ ] Implement multi-certificate extraction logic.
-- [ ] **TrustStore Extension**
-    - [ ] Implement `load_from_file` in `pki/x509.mojo`.
-    - [ ] Implement system path discovery.
-- [ ] **Verification**
-    - [ ] Verify that a local `ca-bundle.crt` can be loaded.
-    - [ ] Ensure memory usage is stable when loading 100+ certificates.
+### 4. TLS Handshake Gating (`tls/tls13.mojo`)
+- **Signature Algorithms**: Update `ClientHello` to include `rsa_pkcs1_sha256`, `rsa_pkcs1_sha384`, and `ecdsa_secp384r1_sha384`.
+- **CertVerify**: Support processing RSA and P-384 `CertificateVerify` messages from the server.
 
 ## Acceptance Criteria
-- `TrustStore` can be populated from a `.pem` or `.crt` file.
-- All sites in `docs/failing.md` that are failing due to missing ECDSA-chain certificates (like Wikipedia/Let's Encrypt E8) pass once the appropriate CA is loaded into the store.
-- **Note:** Sites requiring RSA signatures for verification will remain failing on signature verification until RSA support is added, which is outside the scope of this specific plan.
+- `tests/test_https_get.mojo` passes for **all** sites listed in `docs/failing.md`, including:
+    - `www.google.com` (RSA Leaf)
+    - `www.wikipedia.org` (P-384 Leaf, RSA Root)
+    - `www.github.com` (P-256 Leaf, RSA Root)
+- No regression in existing P-256 sites (e.g., `example.com`).

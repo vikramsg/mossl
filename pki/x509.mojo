@@ -2,6 +2,8 @@
 from collections import List
 
 from pki.ecdsa_p256 import verify_ecdsa_p256, verify_ecdsa_p256_hash
+from pki.ecdsa_p384 import verify_ecdsa_p384_hash
+from pki.rsa import verify_rsa_pkcs1v15
 
 from crypto.sha384 import sha384_bytes
 
@@ -263,7 +265,7 @@ fn load_system_trust_store() -> TrustStore:
     return trust^
 
 
-fn verify_certificate_signature(cert: ParsedCertificate) -> Bool:
+fn verify_certificate_signature(cert: ParsedCertificate) raises -> Bool:
     var oid_ecdsa_sha256 = List[UInt8]()
     oid_ecdsa_sha256.append(UInt8(0x2A))
     oid_ecdsa_sha256.append(UInt8(0x86))
@@ -282,18 +284,43 @@ fn verify_certificate_signature(cert: ParsedCertificate) -> Bool:
     oid_ecdsa_sha384.append(UInt8(0x04))
     oid_ecdsa_sha384.append(UInt8(0x03))
     oid_ecdsa_sha384.append(UInt8(0x03))
+
+    var oid_rsa_sha256 = List[UInt8]()
+    oid_rsa_sha256.append(UInt8(0x2A))
+    oid_rsa_sha256.append(UInt8(0x86))
+    oid_rsa_sha256.append(UInt8(0x48))
+    oid_rsa_sha256.append(UInt8(0x86))
+    oid_rsa_sha256.append(UInt8(0xF7))
+    oid_rsa_sha256.append(UInt8(0x0D))
+    oid_rsa_sha256.append(UInt8(0x01))
+    oid_rsa_sha256.append(UInt8(0x01))
+    oid_rsa_sha256.append(UInt8(0x0B))
+
+    var oid_rsa_sha384 = List[UInt8]()
+    oid_rsa_sha384.append(UInt8(0x2A))
+    oid_rsa_sha384.append(UInt8(0x86))
+    oid_rsa_sha384.append(UInt8(0x48))
+    oid_rsa_sha384.append(UInt8(0x86))
+    oid_rsa_sha384.append(UInt8(0xF7))
+    oid_rsa_sha384.append(UInt8(0x0D))
+    oid_rsa_sha384.append(UInt8(0x01))
+    oid_rsa_sha384.append(UInt8(0x01))
+    oid_rsa_sha384.append(UInt8(0x0C))
+
     if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
         return verify_ecdsa_p256(cert.public_key, cert.tbs, cert.signature)
     if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
-        return verify_ecdsa_p256_hash(
+        return verify_ecdsa_p384_hash(
             cert.public_key, sha384_bytes(cert.tbs), cert.signature
         )
+    if oid_equal(cert.signature_oid, oid_rsa_sha256):
+        return verify_rsa_pkcs1v15(cert.public_key, cert.tbs, cert.signature)
     return False
 
 
 fn verify_signature_with_issuer(
     cert: ParsedCertificate, issuer_pubkey: List[UInt8]
-) -> Bool:
+) raises -> Bool:
     var oid_ecdsa_sha256 = List[UInt8]()
     oid_ecdsa_sha256.append(UInt8(0x2A))
     oid_ecdsa_sha256.append(UInt8(0x86))
@@ -312,18 +339,32 @@ fn verify_signature_with_issuer(
     oid_ecdsa_sha384.append(UInt8(0x04))
     oid_ecdsa_sha384.append(UInt8(0x03))
     oid_ecdsa_sha384.append(UInt8(0x03))
+
+    var oid_rsa_sha256 = List[UInt8]()
+    oid_rsa_sha256.append(UInt8(0x2A))
+    oid_rsa_sha256.append(UInt8(0x86))
+    oid_rsa_sha256.append(UInt8(0x48))
+    oid_rsa_sha256.append(UInt8(0x86))
+    oid_rsa_sha256.append(UInt8(0xF7))
+    oid_rsa_sha256.append(UInt8(0x0D))
+    oid_rsa_sha256.append(UInt8(0x01))
+    oid_rsa_sha256.append(UInt8(0x01))
+    oid_rsa_sha256.append(UInt8(0x0B))
+
     if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
         return verify_ecdsa_p256(issuer_pubkey, cert.tbs, cert.signature)
     if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
-        return verify_ecdsa_p256_hash(
+        return verify_ecdsa_p384_hash(
             issuer_pubkey, sha384_bytes(cert.tbs), cert.signature
         )
+    if oid_equal(cert.signature_oid, oid_rsa_sha256):
+        return verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
     return False
 
 
 fn verify_chain(
     leaf_der: List[UInt8], trust: TrustStore, hostname: List[UInt8]
-) -> Bool:
+) raises -> Bool:
     var leaf = parse_certificate(leaf_der)
     if len(leaf.tbs) == 0:
         return False
@@ -335,10 +376,9 @@ fn verify_chain(
         if len(root.tbs) == 0:
             i += 1
             continue
-        if len(leaf.issuer_cn) > 0 and len(root.subject_cn) > 0:
-            if not bytes_equal(leaf.issuer_cn, root.subject_cn):
-                i += 1
-                continue
+        if not bytes_equal(leaf.issuer_cn, root.subject_cn):
+            i += 1
+            continue
         if verify_signature_with_issuer(leaf, root.public_key):
             return True
         i += 1
