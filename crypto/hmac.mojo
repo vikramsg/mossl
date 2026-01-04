@@ -1,7 +1,9 @@
 """Pure Mojo HMAC-SHA256 implementation."""
 from collections import List
-from crypto.sha256 import sha256_bytes
+
 from crypto.bytes import concat_bytes, zeros
+from crypto.sha256 import sha256_bytes
+
 
 fn pad_key(key: List[UInt8], block_size: Int) -> List[UInt8]:
     var out = List[UInt8]()
@@ -10,6 +12,7 @@ fn pad_key(key: List[UInt8], block_size: Int) -> List[UInt8]:
     while len(out) < block_size:
         out.append(UInt8(0))
     return out^
+
 
 fn hmac_sha256(key: List[UInt8], data: List[UInt8]) -> List[UInt8]:
     var k = key.copy()
@@ -21,7 +24,7 @@ fn hmac_sha256(key: List[UInt8], data: List[UInt8]) -> List[UInt8]:
     var i_key = List[UInt8]()
     var i = 0
     while i < 64:
-        o_key.append(UInt8(k[i] ^ UInt8(0x5c)))
+        o_key.append(UInt8(k[i] ^ UInt8(0x5C)))
         i_key.append(UInt8(k[i] ^ UInt8(0x36)))
         i += 1
 

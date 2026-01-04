@@ -1,8 +1,11 @@
 """ECDSA P-256 verification (affine, minimal)."""
 from collections import List
+
+from pki.asn1 import DerReader, read_sequence_reader, read_integer_bytes
+
 from crypto.bytes import hex_to_bytes
 from crypto.sha256 import sha256_bytes
-from pki.asn1 import DerReader, read_sequence_reader, read_integer_bytes
+
 from pki.bigint256 import (
     u256_from_be,
     cmp_limbs,
@@ -14,6 +17,7 @@ from pki.bigint256 import (
     mod_reduce,
 )
 
+
 @fieldwise_init
 struct ECPoint(Movable):
     var x: List[UInt64]
@@ -23,6 +27,7 @@ struct ECPoint(Movable):
     fn clone(self) -> ECPoint:
         return ECPoint(self.x.copy(), self.y.copy(), self.infinity)
 
+
 @fieldwise_init
 struct JacobianPoint(Movable):
     var x: List[UInt64]
@@ -31,10 +36,14 @@ struct JacobianPoint(Movable):
     var infinity: Bool
 
     fn clone(self) -> JacobianPoint:
-        return JacobianPoint(self.x.copy(), self.y.copy(), self.z.copy(), self.infinity)
+        return JacobianPoint(
+            self.x.copy(), self.y.copy(), self.z.copy(), self.infinity
+        )
+
 
 fn u256_from_hex(hex: String) -> List[UInt64]:
     return u256_from_be(hex_to_bytes(hex))
+
 
 fn u256_const(v: UInt64) -> List[UInt64]:
     var out = List[UInt64]()
@@ -44,17 +53,30 @@ fn u256_const(v: UInt64) -> List[UInt64]:
     out.append(UInt64(0))
     return out^
 
+
 fn p256_p() -> List[UInt64]:
-    return u256_from_hex("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff")
+    return u256_from_hex(
+        "ffffffff00000001000000000000000000000000ffffffffffffffffffffffff"
+    )
+
 
 fn p256_n() -> List[UInt64]:
-    return u256_from_hex("ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551")
+    return u256_from_hex(
+        "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+    )
+
 
 fn p256_gx() -> List[UInt64]:
-    return u256_from_hex("6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296")
+    return u256_from_hex(
+        "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296"
+    )
+
 
 fn p256_gy() -> List[UInt64]:
-    return u256_from_hex("4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5")
+    return u256_from_hex(
+        "4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"
+    )
+
 
 fn point_infinity() -> ECPoint:
     var zero = List[UInt64]()
@@ -64,10 +86,12 @@ fn point_infinity() -> ECPoint:
     zero.append(UInt64(0))
     return ECPoint(zero, zero.copy(), True)
 
+
 fn jacobian_infinity() -> JacobianPoint:
     var zero = u256_const(UInt64(0))
     var one = u256_const(UInt64(1))
     return JacobianPoint(zero.copy(), one, zero, True)
+
 
 fn jacobian_from_affine(p: ECPoint) -> JacobianPoint:
     if p.infinity:
@@ -79,6 +103,7 @@ fn jacobian_from_affine(p: ECPoint) -> JacobianPoint:
     one.append(UInt64(0))
     return JacobianPoint(p.x.copy(), p.y.copy(), one, False)
 
+
 fn jacobian_to_affine(p: JacobianPoint) -> ECPoint:
     if p.infinity:
         return point_infinity()
@@ -88,6 +113,7 @@ fn jacobian_to_affine(p: JacobianPoint) -> ECPoint:
     var x = mod_mul(p.x, z2, mod)
     var y = mod_mul(p.y, mod_mul(z2, z_inv, mod), mod)
     return ECPoint(x, y, False)
+
 
 fn jacobian_double(p: JacobianPoint) -> JacobianPoint:
     if p.infinity:
@@ -100,13 +126,32 @@ fn jacobian_double(p: JacobianPoint) -> JacobianPoint:
     var yy = mod_mul(p.y, p.y, mod)
     var yyyy = mod_mul(yy, yy, mod)
     var zz = mod_mul(p.z, p.z, mod)
-    var s = mod_mul(two, sub_mod(sub_mod(mod_mul(add_mod(p.x, yy, mod), add_mod(p.x, yy, mod), mod), xx, mod), yyyy, mod), mod)
-    var m = add_mod(mod_mul(three, xx, mod), mod_mul(a, mod_mul(zz, zz, mod), mod), mod)
+    var s = mod_mul(
+        two,
+        sub_mod(
+            sub_mod(
+                mod_mul(add_mod(p.x, yy, mod), add_mod(p.x, yy, mod), mod),
+                xx,
+                mod,
+            ),
+            yyyy,
+            mod,
+        ),
+        mod,
+    )
+    var m = add_mod(
+        mod_mul(three, xx, mod), mod_mul(a, mod_mul(zz, zz, mod), mod), mod
+    )
     var t = mod_mul(m, m, mod)
     var x3 = sub_mod(sub_mod(t, s, mod), s, mod)
-    var y3 = sub_mod(mod_mul(m, sub_mod(s, x3, mod), mod), mod_mul(u256_const(UInt64(8)), yyyy, mod), mod)
+    var y3 = sub_mod(
+        mod_mul(m, sub_mod(s, x3, mod), mod),
+        mod_mul(u256_const(UInt64(8)), yyyy, mod),
+        mod,
+    )
     var z3 = mod_mul(two, mod_mul(p.y, p.z, mod), mod)
     return JacobianPoint(x3, y3, z3, False)
+
 
 fn jacobian_add(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint:
     if p.infinity:
@@ -130,10 +175,15 @@ fn jacobian_add(p: JacobianPoint, q: JacobianPoint) -> JacobianPoint:
     var h3 = mod_mul(h2, h, mod)
     var u1h2 = mod_mul(u1, h2, mod)
     var two = u256_const(UInt64(2))
-    var x3 = sub_mod(sub_mod(mod_mul(r, r, mod), h3, mod), mod_mul(two, u1h2, mod), mod)
-    var y3 = sub_mod(mod_mul(r, sub_mod(u1h2, x3, mod), mod), mod_mul(s1, h3, mod), mod)
+    var x3 = sub_mod(
+        sub_mod(mod_mul(r, r, mod), h3, mod), mod_mul(two, u1h2, mod), mod
+    )
+    var y3 = sub_mod(
+        mod_mul(r, sub_mod(u1h2, x3, mod), mod), mod_mul(s1, h3, mod), mod
+    )
     var z3 = mod_mul(h, mod_mul(p.z, q.z, mod), mod)
     return JacobianPoint(x3, y3, z3, False)
+
 
 fn point_add(p: ECPoint, q: ECPoint) -> ECPoint:
     if p.infinity:
@@ -152,6 +202,7 @@ fn point_add(p: ECPoint, q: ECPoint) -> ECPoint:
     var x3 = sub_mod(sub_mod(mod_mul(lam, lam, mod), p.x, mod), q.x, mod)
     var y3 = sub_mod(mod_mul(lam, sub_mod(p.x, x3, mod), mod), p.y, mod)
     return ECPoint(x3, y3, False)
+
 
 fn point_double(p: ECPoint) -> ECPoint:
     if p.infinity:
@@ -177,6 +228,7 @@ fn point_double(p: ECPoint) -> ECPoint:
     var y3 = sub_mod(mod_mul(lam, sub_mod(p.x, x3, mod), mod), p.y, mod)
     return ECPoint(x3, y3, False)
 
+
 fn scalar_mul(k: List[UInt64], p: ECPoint) -> ECPoint:
     var result = jacobian_infinity()
     var addend = jacobian_from_affine(p)
@@ -188,6 +240,7 @@ fn scalar_mul(k: List[UInt64], p: ECPoint) -> ECPoint:
         i += 1
     return jacobian_to_affine(result)
 
+
 fn parse_ecdsa_signature(sig_der: List[UInt8]) -> (List[UInt64], List[UInt64]):
     var reader = DerReader(sig_der)
     var seq = read_sequence_reader(reader)
@@ -195,7 +248,10 @@ fn parse_ecdsa_signature(sig_der: List[UInt8]) -> (List[UInt64], List[UInt64]):
     var s_bytes = read_integer_bytes(seq)
     return (u256_from_be(r_bytes), u256_from_be(s_bytes))
 
-fn verify_ecdsa_p256(pubkey: List[UInt8], msg: List[UInt8], sig_der: List[UInt8]) -> Bool:
+
+fn verify_ecdsa_p256(
+    pubkey: List[UInt8], msg: List[UInt8], sig_der: List[UInt8]
+) -> Bool:
     if len(pubkey) != 65:
         return False
     if pubkey[0] != UInt8(0x04):

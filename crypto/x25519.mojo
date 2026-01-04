@@ -1,34 +1,44 @@
 """Pure Mojo X25519 implementation (RFC 7748)."""
 from collections import List
 
+
 fn mask() -> UInt64:
     return (UInt64(1) << 51) - UInt64(1)
+
 
 fn base() -> UInt64:
     return UInt64(1) << 51
 
+
 fn p0() -> UInt64:
     return mask() - UInt64(18)
+
 
 fn p1() -> UInt64:
     return mask()
 
+
 fn p2() -> UInt64:
     return mask()
+
 
 fn p3() -> UInt64:
     return mask()
 
+
 fn p4() -> UInt64:
     return mask()
+
 
 fn fe_zero() -> List[UInt64]:
     var out: List[UInt64] = [0, 0, 0, 0, 0]
     return out^
 
+
 fn fe_one() -> List[UInt64]:
     var out: List[UInt64] = [UInt64(1), 0, 0, 0, 0]
     return out^
+
 
 fn fe_carry(f_in: List[UInt64]) -> List[UInt64]:
     var f = f_in.copy()
@@ -53,6 +63,7 @@ fn fe_carry(f_in: List[UInt64]) -> List[UInt64]:
     f[0] &= m
     return f^
 
+
 fn fe_add(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     var out = List[UInt64]()
     out.append(a[0] + b[0])
@@ -61,6 +72,7 @@ fn fe_add(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     out.append(a[3] + b[3])
     out.append(a[4] + b[4])
     return fe_carry(out)
+
 
 fn fe_sub(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     var out = List[UInt64]()
@@ -72,9 +84,18 @@ fn fe_sub(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     out.append(a[4] + (m * UInt64(2)) - b[4])
     return fe_carry(out)
 
+
 fn fe_mul(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
-    var a0 = a[0]; var a1 = a[1]; var a2 = a[2]; var a3 = a[3]; var a4 = a[4]
-    var b0 = b[0]; var b1 = b[1]; var b2 = b[2]; var b3 = b[3]; var b4 = b[4]
+    var a0 = a[0]
+    var a1 = a[1]
+    var a2 = a[2]
+    var a3 = a[3]
+    var a4 = a[4]
+    var b0 = b[0]
+    var b1 = b[1]
+    var b2 = b[2]
+    var b3 = b[3]
+    var b4 = b[4]
     var m = mask()
 
     var a1_19 = UInt128(a1) * UInt128(19)
@@ -82,11 +103,41 @@ fn fe_mul(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     var a3_19 = UInt128(a3) * UInt128(19)
     var a4_19 = UInt128(a4) * UInt128(19)
 
-    var c0 = UInt128(a0) * UInt128(b0) + a1_19 * UInt128(b4) + a2_19 * UInt128(b3) + a3_19 * UInt128(b2) + a4_19 * UInt128(b1)
-    var c1 = UInt128(a0) * UInt128(b1) + UInt128(a1) * UInt128(b0) + a2_19 * UInt128(b4) + a3_19 * UInt128(b3) + a4_19 * UInt128(b2)
-    var c2 = UInt128(a0) * UInt128(b2) + UInt128(a1) * UInt128(b1) + UInt128(a2) * UInt128(b0) + a3_19 * UInt128(b4) + a4_19 * UInt128(b3)
-    var c3 = UInt128(a0) * UInt128(b3) + UInt128(a1) * UInt128(b2) + UInt128(a2) * UInt128(b1) + UInt128(a3) * UInt128(b0) + a4_19 * UInt128(b4)
-    var c4 = UInt128(a0) * UInt128(b4) + UInt128(a1) * UInt128(b3) + UInt128(a2) * UInt128(b2) + UInt128(a3) * UInt128(b1) + UInt128(a4) * UInt128(b0)
+    var c0 = (
+        UInt128(a0) * UInt128(b0)
+        + a1_19 * UInt128(b4)
+        + a2_19 * UInt128(b3)
+        + a3_19 * UInt128(b2)
+        + a4_19 * UInt128(b1)
+    )
+    var c1 = (
+        UInt128(a0) * UInt128(b1)
+        + UInt128(a1) * UInt128(b0)
+        + a2_19 * UInt128(b4)
+        + a3_19 * UInt128(b3)
+        + a4_19 * UInt128(b2)
+    )
+    var c2 = (
+        UInt128(a0) * UInt128(b2)
+        + UInt128(a1) * UInt128(b1)
+        + UInt128(a2) * UInt128(b0)
+        + a3_19 * UInt128(b4)
+        + a4_19 * UInt128(b3)
+    )
+    var c3 = (
+        UInt128(a0) * UInt128(b3)
+        + UInt128(a1) * UInt128(b2)
+        + UInt128(a2) * UInt128(b1)
+        + UInt128(a3) * UInt128(b0)
+        + a4_19 * UInt128(b4)
+    )
+    var c4 = (
+        UInt128(a0) * UInt128(b4)
+        + UInt128(a1) * UInt128(b3)
+        + UInt128(a2) * UInt128(b2)
+        + UInt128(a3) * UInt128(b1)
+        + UInt128(a4) * UInt128(b0)
+    )
 
     var carry = c0 >> 51
     c1 += carry
@@ -115,8 +166,10 @@ fn fe_mul(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     out.append(UInt64(c4))
     return out^
 
+
 fn fe_sq(a: List[UInt64]) -> List[UInt64]:
     return fe_mul(a, a)
+
 
 fn fe_mul_small(a: List[UInt64], c: UInt64) -> List[UInt64]:
     var m = mask()
@@ -153,6 +206,7 @@ fn fe_mul_small(a: List[UInt64], c: UInt64) -> List[UInt64]:
     out.append(UInt64(t4))
     return out^
 
+
 fn fe_sq_pow(a: List[UInt64], n: Int) -> List[UInt64]:
     var out = a.copy()
     var i = 0
@@ -160,6 +214,7 @@ fn fe_sq_pow(a: List[UInt64], n: Int) -> List[UInt64]:
         out = fe_sq(out)
         i += 1
     return out^
+
 
 fn fe_invert(z: List[UInt64]) -> List[UInt64]:
     var t0 = fe_sq(z)
@@ -186,6 +241,7 @@ fn fe_invert(z: List[UInt64]) -> List[UInt64]:
     t1 = fe_sq_pow(t1, 5)
     return fe_mul(t1, t0)
 
+
 fn load64_le(bytes: List[UInt8], offset: Int) -> UInt64:
     var out = UInt64(0)
     var i = 0
@@ -193,6 +249,7 @@ fn load64_le(bytes: List[UInt8], offset: Int) -> UInt64:
         out |= UInt64(bytes[offset + i]) << (i * 8)
         i += 1
     return out
+
 
 fn fe_from_bytes(s: List[UInt8]) -> List[UInt64]:
     var m = mask()
@@ -206,8 +263,13 @@ fn fe_from_bytes(s: List[UInt8]) -> List[UInt64]:
     var f3 = ((t2 >> 25) | (t3 << 39)) & m
     var f4 = (t3 >> 12) & m
     var out = List[UInt64]()
-    out.append(f0); out.append(f1); out.append(f2); out.append(f3); out.append(f4)
+    out.append(f0)
+    out.append(f1)
+    out.append(f2)
+    out.append(f3)
+    out.append(f4)
     return out^
+
 
 fn fe_ge_p(f: List[UInt64]) -> Bool:
     var p4v = p4()
@@ -233,12 +295,17 @@ fn fe_ge_p(f: List[UInt64]) -> Bool:
         return False
     return f[0] >= p0v
 
+
 fn fe_sub_p(f: List[UInt64]) -> List[UInt64]:
     var out = List[UInt64]()
     var borrow = Int(0)
     var basev = Int(base())
     var p = List[UInt64]()
-    p.append(p0()); p.append(p1()); p.append(p2()); p.append(p3()); p.append(p4())
+    p.append(p0())
+    p.append(p1())
+    p.append(p2())
+    p.append(p3())
+    p.append(p4())
     var i = 0
     while i < 5:
         var tmp = Int(f[i]) - Int(p[i]) - borrow
@@ -251,11 +318,13 @@ fn fe_sub_p(f: List[UInt64]) -> List[UInt64]:
         i += 1
     return out^
 
+
 fn append_u64_le(mut buf: List[UInt8], value: UInt64):
     var i = 0
     while i < 8:
-        buf.append(UInt8((value >> (i * 8)) & UInt64(0xff)))
+        buf.append(UInt8((value >> (i * 8)) & UInt64(0xFF)))
         i += 1
+
 
 fn fe_to_bytes(f_in: List[UInt64]) -> List[UInt8]:
     var f = fe_carry(f_in)
@@ -274,6 +343,7 @@ fn fe_to_bytes(f_in: List[UInt64]) -> List[UInt8]:
     append_u64_le(out, t3)
     return out^
 
+
 fn clamp_scalar(k_in: List[UInt8]) -> List[UInt8]:
     var k = List[UInt8]()
     for b in k_in:
@@ -282,6 +352,7 @@ fn clamp_scalar(k_in: List[UInt8]) -> List[UInt8]:
     k[31] &= UInt8(127)
     k[31] |= UInt8(64)
     return k^
+
 
 fn x25519(scalar: List[UInt8], u: List[UInt8]) -> List[UInt8]:
     var k = clamp_scalar(scalar)
@@ -299,8 +370,12 @@ fn x25519(scalar: List[UInt8], u: List[UInt8]) -> List[UInt8]:
         var kt = (Int(k[byte_index]) >> bit_index) & 1
         swap ^= kt
         if swap == 1:
-            var tmp = x2.copy(); x2 = x3.copy(); x3 = tmp.copy()
-            tmp = z2.copy(); z2 = z3.copy(); z3 = tmp.copy()
+            var tmp = x2.copy()
+            x2 = x3.copy()
+            x3 = tmp.copy()
+            tmp = z2.copy()
+            z2 = z3.copy()
+            z3 = tmp.copy()
         swap = kt
 
         var a = fe_add(x2, z2)
@@ -316,8 +391,10 @@ fn x25519(scalar: List[UInt8], u: List[UInt8]) -> List[UInt8]:
         var z3_new = fe_mul(x1, fe_sq(fe_sub(da, cb)))
         var x2_new = fe_mul(aa, bb)
         var z2_new = fe_mul(e, fe_add(aa, fe_mul_small(e, UInt64(121665))))
-        x3 = x3_new.copy(); z3 = z3_new.copy()
-        x2 = x2_new.copy(); z2 = z2_new.copy()
+        x3 = x3_new.copy()
+        z3 = z3_new.copy()
+        x2 = x2_new.copy()
+        z2 = z2_new.copy()
         t -= 1
 
     if swap == 1:

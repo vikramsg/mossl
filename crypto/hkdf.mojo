@@ -1,13 +1,16 @@
 """Pure Mojo HKDF implementation (RFC 5869)."""
 from collections import List
-from crypto.hmac import hmac_sha256
+
 from crypto.bytes import concat_bytes, zeros
+from crypto.hmac import hmac_sha256
+
 
 fn hkdf_extract(salt: List[UInt8], ikm: List[UInt8]) -> List[UInt8]:
     var s = salt.copy()
     if len(s) == 0:
         s = zeros(32)
     return hmac_sha256(s, ikm)
+
 
 fn hkdf_expand(prk: List[UInt8], info: List[UInt8], length: Int) -> List[UInt8]:
     var hash_len = 32

@@ -1,6 +1,7 @@
 """Byte helpers for hex parsing and formatting."""
 from collections import List
 
+
 fn hex_nibble(ch: StringSlice) -> UInt8:
     if ch == "0":
         return UInt8(0)
@@ -36,6 +37,7 @@ fn hex_nibble(ch: StringSlice) -> UInt8:
         return UInt8(15)
     return UInt8(0)
 
+
 fn hex_to_bytes(hex: String) -> List[UInt8]:
     var out = List[UInt8]()
     var i = 0
@@ -46,14 +48,16 @@ fn hex_to_bytes(hex: String) -> List[UInt8]:
         i += 2
     return out^
 
+
 fn bytes_to_hex(bytes: List[UInt8]) -> String:
     var digits = "0123456789abcdef"
     var out = ""
     for b in bytes:
-        var hi = Int((b >> 4) & 0x0f)
-        var lo = Int(b & 0x0f)
+        var hi = Int((b >> 4) & 0x0F)
+        var lo = Int(b & 0x0F)
         out += digits[hi] + digits[lo]
     return out^
+
 
 fn concat_bytes(a: List[UInt8], b: List[UInt8]) -> List[UInt8]:
     var out = List[UInt8]()
@@ -62,6 +66,7 @@ fn concat_bytes(a: List[UInt8], b: List[UInt8]) -> List[UInt8]:
     for v in b:
         out.append(v)
     return out^
+
 
 fn zeros(count: Int) -> List[UInt8]:
     var out = List[UInt8]()
