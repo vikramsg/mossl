@@ -90,7 +90,7 @@ TCP Socket
 | Stage 2: Key Exchange | [x] | [x] | [x] |
 | Stage 3: Record Layer AEAD | [x] | [x] | [x] |
 | Stage 4: Certificates and Signatures | [x] | [x] | [x] |
-| Stage 5: lightbug_http Integration | [ ] | [ ] | [ ] |
+| Stage 5: lightbug_http Integration | [x] | [x] | [x] |
 
 ### Running Tests
 - Quint: `npx quint test specs/<spec>.qnt`

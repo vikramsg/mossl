@@ -1,6 +1,6 @@
 """TLS 1.3 handshake state machine skeleton (Stage 0)."""
 
-struct HandshakeEngine:
+struct HandshakeEngine(Movable):
     var state: Int
     var verified: Bool
 
