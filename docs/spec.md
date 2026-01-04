@@ -68,7 +68,7 @@ TCP Socket
 
 ### Code Layout
 - **Mojo implementation** lives under `src/` (e.g., `src/tls/`, `src/crypto/`, `src/pki/`).
-- **Mojo tests** live under `tests/` and are named to match the stage (e.g., `tests/hkdf_test.mojo`).
+- **Mojo tests** live under `tests/` and use `test_*` naming (e.g., `tests/test_hkdf.mojo`).
 - **Quint specs** live under `specs/` and include stage-specific tests.
 
 ### Stage Gate (Spec + Mojo Tests)
@@ -92,4 +92,4 @@ TCP Socket
 
 ### Running Tests
 - Quint: `npx quint test specs/<spec>.qnt`
-- Mojo: `pixi run <test-command>` (define stage-specific commands in `pixi.toml`)
+- Mojo: `mojo run -I . tests/test_<name>.mojo` or `pixi run test-stage1` for the grouped Stage 1 commands
