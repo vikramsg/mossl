@@ -4,9 +4,11 @@
 TEST_SPECS := pixi run test-specs
 TEST_CRYPTO := pixi run test-crypto
 TEST_TLS := pixi run test-tls
+TEST_PKI := pixi run test-pki
+TEST_TRACE := pixi run test-trace
 TEST_ALL := pixi run test-all
 
-.PHONY: test-specs test-crypto test-tls test-all
+.PHONY: test-specs test-crypto test-tls test-pki test-trace test-all
 
 test-specs:
 	$(TEST_SPECS)
@@ -16,6 +18,12 @@ test-crypto:
 
 test-tls:
 	$(TEST_TLS)
+
+test-pki:
+	$(TEST_PKI)
+
+test-trace:
+	$(TEST_TRACE)
 
 test-all:
 	$(TEST_ALL)
@@ -55,4 +63,3 @@ worktree-remove:
 		exit 1; \
 	fi
 	git worktree remove worktrees/$(BRANCH_ARG)
-

@@ -249,8 +249,8 @@ fn parse_ecdsa_signature(sig_der: List[UInt8]) -> (List[UInt64], List[UInt64]):
     return (u256_from_be(r_bytes), u256_from_be(s_bytes))
 
 
-fn verify_ecdsa_p256(
-    pubkey: List[UInt8], msg: List[UInt8], sig_der: List[UInt8]
+fn verify_ecdsa_p256_hash(
+    pubkey: List[UInt8], hash: List[UInt8], sig_der: List[UInt8]
 ) -> Bool:
     if len(pubkey) != 65:
         return False
@@ -274,7 +274,15 @@ fn verify_ecdsa_p256(
         return False
     if cmp_limbs(r, n) >= 0 or cmp_limbs(s, n) >= 0:
         return False
-    var e = u256_from_be(sha256_bytes(msg))
+    var digest = hash.copy()
+    if len(digest) > 32:
+        var truncated = List[UInt8]()
+        var i = 0
+        while i < 32:
+            truncated.append(digest[i])
+            i += 1
+        digest = truncated
+    var e = u256_from_be(digest)
     var w = mod_inv(s, n)
     var u1 = mod_mul(e, w, n)
     var u2 = mod_mul(r, w, n)
@@ -284,3 +292,9 @@ fn verify_ecdsa_p256(
     var x = point_add(p1, p2).x.copy()
     var v = mod_reduce(x, n)
     return cmp_limbs(v, r) == 0
+
+
+fn verify_ecdsa_p256(
+    pubkey: List[UInt8], msg: List[UInt8], sig_der: List[UInt8]
+) -> Bool:
+    return verify_ecdsa_p256_hash(pubkey, sha256_bytes(msg), sig_der)

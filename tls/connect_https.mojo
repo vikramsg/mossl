@@ -10,8 +10,12 @@ fn connect_https(
 ) raises -> TLSSocket[SocketTransport]:
     var socket = Socket[TCPAddr]()
     socket.connect(host, port)
-    var tls = TLSSocket[SocketTransport](SocketTransport(socket^))
-    if not tls.perform_handshake():
+    var tls = TLSSocket[SocketTransport](SocketTransport(socket^), host)
+    try:
+        if not tls.perform_handshake():
+            tls.teardown()
+            raise Error("connect_https: Handshake failed.")
+    except e:
         tls.teardown()
-        raise Error("connect_https: Handshake failed.")
+        raise e
     return tls^

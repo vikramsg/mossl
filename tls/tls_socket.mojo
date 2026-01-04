@@ -2,35 +2,12 @@
 from collections import List
 
 from lightbug_http.address import TCPAddr
-from lightbug_http.connection import Connection
 from lightbug_http.io.bytes import Bytes
 from lightbug_http.socket import Socket
 from memory import Span
 
-from tls.handshake import HandshakeEngine
-
-
-trait TLSTransport(Movable):
-    fn read(self, mut buf: Bytes) raises -> Int:
-        ...
-
-    fn write(self, buf: Span[Byte]) raises -> Int:
-        ...
-
-    fn close(mut self) raises:
-        ...
-
-    fn shutdown(mut self) raises -> None:
-        ...
-
-    fn teardown(mut self) raises:
-        ...
-
-    fn local_addr(self) -> TCPAddr:
-        ...
-
-    fn remote_addr(self) -> TCPAddr:
-        ...
+from tls.tls13 import TLS13Client
+from tls.transport import TLSTransport
 
 
 struct SocketTransport(TLSTransport):
@@ -91,49 +68,52 @@ struct NullTransport(TLSTransport):
         return self.remote
 
 
-struct TLSSocket[T: TLSTransport](Connection):
-    var transport: T
-    var handshake: HandshakeEngine
+struct TLSSocket[T: TLSTransport](Movable):
+    var tls: TLS13Client[T]
+    var handshake_ok: Bool
 
-    fn __init__(out self, var transport: T):
-        self.transport = transport^
-        self.handshake = HandshakeEngine()
+    fn __init__(out self, var transport: T, host: String):
+        self.tls = TLS13Client[T](transport^, host)
+        self.handshake_ok = False
 
-    fn perform_handshake(mut self) -> Bool:
-        if not self.handshake.send_client_hello():
-            return False
-        if not self.handshake.receive_server_flight():
-            return False
-        if not self.handshake.verify_certificate(True):
-            return False
-        if not self.handshake.send_finished():
-            return False
-        return self.handshake.handshake_complete()
+    fn perform_handshake(mut self) raises -> Bool:
+        var ok = self.tls.perform_handshake()
+        self.handshake_ok = ok
+        return ok
 
     fn can_send_application_data(self) -> Bool:
-        return self.handshake.can_send_application_data()
+        return self.handshake_ok
 
-    fn read(self, mut buf: Bytes) raises -> Int:
-        if not self.handshake.can_send_application_data():
+    fn read(mut self, mut buf: Bytes) raises -> Int:
+        if not self.handshake_ok:
             raise Error("TLSSocket.read: Handshake not complete.")
-        return self.transport.read(buf)
+        var data = self.tls.read_app_data()
+        while len(buf) > 0:
+            _ = buf.pop()
+        for b in data:
+            buf.append(Byte(b))
+        return len(buf)
 
-    fn write(self, buf: Span[Byte]) raises -> Int:
-        if not self.handshake.can_send_application_data():
+    fn write(mut self, buf: Span[Byte]) raises -> Int:
+        if not self.handshake_ok:
             raise Error("TLSSocket.write: Handshake not complete.")
-        return self.transport.write(buf)
+        var out = List[UInt8]()
+        for b in buf:
+            out.append(UInt8(b))
+        self.tls.write_app_data(out)
+        return len(buf)
 
     fn close(mut self) raises:
-        self.transport.close()
+        self.tls.transport.close()
 
     fn shutdown(mut self) raises -> None:
-        self.transport.shutdown()
+        self.tls.transport.shutdown()
 
     fn teardown(mut self) raises:
-        self.transport.teardown()
+        self.tls.transport.teardown()
 
     fn local_addr(self) -> TCPAddr:
-        return self.transport.local_addr()
+        return self.tls.transport.local_addr()
 
     fn remote_addr(self) -> TCPAddr:
-        return self.transport.remote_addr()
+        return self.tls.transport.remote_addr()

@@ -38,9 +38,13 @@
 - **Specs + Tests**: Quint specs define generic signature and chain gating; Mojo tests validate known-good and known-bad chains.
 
 ### Stage 5: `lightbug_http` Integration
-- Create a `TLSSocket` wrapper that conforms to the interface expected by `lightbug_http.client.Client`.
-- Implement `connect_https` to perform the handshake before returning the encrypted stream.
-- **Specs + Tests**: Quint spec ensures no HTTP I/O before `HandshakeComplete`; Mojo tests hit `https://httpbin.org/get`.
+- `TLSSocket` wrapper is implemented in `tls/tls_socket.mojo` and now performs a **real TLS 1.3 handshake + record protection**.
+- `connect_https` builds a TCP socket, wraps it in `TLSSocket`, and runs the handshake.
+- **Local adapter (no upstream changes):** `tls/https_client.mojo` implements `TLSConnectionAdapter` + `HTTPSClient` shim to drive HTTPS without modifying the upstream package.
+- **Specs + Tests**:
+  - Gating spec/test: `specs/tls_http_gating.qnt`, `tests/test_tls_socket.mojo`
+  - RFC 8448 vectors: `tests/test_tls13_rfc8448_kdf.mojo`, `tests/test_tls13_rfc8448_record.mojo`
+  - End‑to‑end HTTPS: `tests/test_https_get.mojo` (script: `scripts/lightbug_https_get.mojo`)
 
 ### Stage Requirements (All Stages)
 - **Every stage must include matching Quint spec tests and Mojo tests** that cover the same contract (one spec test maps to one Mojo test case or vector set).
@@ -90,20 +94,30 @@ TCP Socket
 | Stage 2: Key Exchange | [x] | [x] | [x] |
 | Stage 3: Record Layer AEAD | [x] | [x] | [x] |
 | Stage 4: Certificates and Signatures | [x] | [x] | [x] |
-| Stage 5: lightbug_http Integration | [ ] | [ ] | [ ] |
+| Stage 5: lightbug_http Integration | [x] | [x] | [x] |
 
-**Stage 5 status note:** HTTPS is not yet wired end-to-end. The `lightbug_http` client and response parser are hard-typed to `TCPConnection`, so a TLS connection cannot be injected without modifying `lightbug_http`, and the `https://httpbin.org/get` Mojo test is still missing.
+**Stage 5 status note:** A local HTTPS path exists via `tls/https_client.mojo` (adapter + shim). Real TLS 1.3 handshake + record protection are wired, and the `https://example.com/` test passes.
 
-### Follow-ups (No Implementation Yet)
-- **Wire TLS into lightbug_http**: Update `lightbug_http.client.Client` to use `TLSSocket` for HTTPS (and keep HTTP on plain TCP).
-- **Real TLS 1.3 handshake**: Replace the abstract handshake skeleton with real message serialization, key schedule derivation, and Finished verification.
-- **Record protection**: Encrypt/decrypt records with AES-GCM using sequence-derived nonces (including content type inner framing).
-- **Trust store loading**: Load system CA bundle(s) per platform and add chain building with intermediates.
-- **End-to-end HTTPS test**: Add a real `https://httpbin.org/get` test once TLS I/O is complete.
+### Follow-ups (Optional, Not Implemented)
+- **Wire TLS into lightbug_http**: Update `lightbug_http.client.Client` to use `TLSSocket` for HTTPS (keep HTTP on plain TCP).
 
 #### Feasibility Note (lightbug_http Wiring)
-- **Not plug-and-play today**: `lightbug_http.client.Client` is hard-typed to `TCPConnection`, and `HTTPResponse.from_bytes` also expects `TCPConnection`. This means a `TLSSocket` cannot be injected without modifying `lightbug_http` types.
-- **Required changes to make it feasible**: Generalize the client/pool/response parser to accept the `Connection` trait (or a TLS-capable connection trait), then implement a `TLSConnection` wrapper that satisfies that trait.
+- **Not plug-and-play today**: `lightbug_http.client.Client` is hard-typed to `TCPConnection`, and `HTTPResponse.from_bytes` also expects `TCPConnection`. This prevents injecting a `TLSSocket` directly even though `TLSSocket` implements `lightbug_http.connection.Connection`.
+- **Local adapter plan (no upstream changes)**:
+  - `TLSConnectionAdapter` mirrors the `TCPConnection` API surface used by `lightbug_http`, and delegates I/O to `TLSSocket`.
+    - **Minimum surface mirrored (from current `lightbug_http` usage):**
+      - `read(self, mut buf: Bytes) raises -> UInt`
+      - `write(self, buf: Span[Byte]) raises -> UInt`
+      - `close(mut self) raises`
+      - `shutdown(mut self) raises -> None`
+      - `teardown(mut self) raises`
+      - `local_addr(self) -> TCPAddr`
+      - `remote_addr(self) -> TCPAddr`
+      - `is_closed(self) -> Bool`
+    - If additional calls appear during wiring (e.g., connection state flags), mirror those methods on the adapter as thin pass‑throughs.
+  - `HTTPSClient` (local shim) mirrors the minimal behavior of `lightbug_http.client.Client.do` using the adapter for HTTPS while reusing `lightbug_http` request/response types.
+  - Response parsing is handled locally to avoid reliance on `HTTPResponse.from_bytes(..., TCPConnection)`.
+  - Keep `http://` requests on `lightbug_http.client.Client` unchanged; route `https://` through the local adapter path.
 
 ### Running Tests
 - Quint: `npx quint test specs/<spec>.qnt`
