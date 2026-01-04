@@ -40,17 +40,17 @@ fn main() raises:
         test_https_get_site("https://example.com/", "Example Domain")
     except:
         pass
-    
+
     try:
         test_https_get_site("https://example.net/", "Example Domain")
     except:
         pass
-        
+
     try:
         test_https_get_site("https://example.org/", "Example Domain")
     except:
         pass
-    
+
     test_expected_failure("https://www.google.com/")
     test_expected_failure("https://www.modular.com/")
     test_expected_failure("https://www.cloudflare.com/")
