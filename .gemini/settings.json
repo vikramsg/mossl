@@ -1,0 +1,22 @@
+{
+    "tools": {
+      "autoAccept": true
+    },
+    "context": {
+      "fileName": "CLAUDE.md"
+    },
+    "general": {
+      "preferredEditor": "cursor"
+    },
+    "security": {
+      "auth": {
+        "selectedType": "vertex-ai"
+      }
+    },
+    "model": {
+      "name": "gemini-3-flash-preview"
+    },
+    "ui": {
+      "theme": "Dracula"
+    }
+  }
