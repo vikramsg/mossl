@@ -3,6 +3,10 @@
 This document helps agents work within the project.
 This project uses the Mojo programming language and the Pixi package manager.
 
+## Spec Coverage
+We aim to map every important operation to a Quint specification and verify each
+spec via its corresponding Mojo implementation test (trace-based or vector-based).
+
 ## Mojo 
 
 ### Mojo Tip: List Comprehension
