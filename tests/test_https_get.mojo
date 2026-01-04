@@ -24,15 +24,16 @@ fn test_https_get_site(url: String, expected_text: String) raises:
 
 
 fn test_expected_failure(url: String) raises:
+    print("Testing expected failure: " + url + "...")
     var client = HTTPSClient()
     var uri = URI.parse(url)
     var req = HTTPRequest(uri)
     try:
         var res = client.do(req^)
-        print("SUCCESS (Unexpected): " + url)
+        print("  SUCCESS (Unexpected): " + url)
         assert_equal(res.status_code, 200)
     except e:
-        print("EXPECTED FAILURE: " + url + " - " + String(e))
+        print("  EXPECTED FAILURE: " + url + " - " + String(e))
 
 
 fn main() raises:

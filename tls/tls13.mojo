@@ -5,6 +5,8 @@ from lightbug_http.address import TCPAddr
 from lightbug_http.io.bytes import Bytes
 from memory import Span
 from pki.ecdsa_p256 import verify_ecdsa_p256_hash
+from pki.ecdsa_p384 import verify_ecdsa_p384_hash
+from pki.rsa import verify_rsa_pkcs1v15
 from pki.trust_store import load_trust_store
 from pki.x509 import parse_certificate, verify_chain
 
@@ -43,6 +45,9 @@ alias CIPHER_TLS_AES_128_GCM_SHA256 = UInt16(0x1301)
 
 alias SIG_ECDSA_SECP256R1_SHA256 = UInt16(0x0403)
 alias SIG_ECDSA_SECP256R1_SHA384 = UInt16(0x0503)
+alias SIG_RSA_PSS_RSAE_SHA256 = UInt16(0x0804)
+alias SIG_RSA_PKCS1_SHA256 = UInt16(0x0401)
+alias SIG_ECDSA_SECP384R1_SHA384 = UInt16(0x0503)
 
 
 fn u16_to_bytes(v: UInt16) -> List[UInt8]:
@@ -293,10 +298,14 @@ fn make_client_hello(
     var sigs = List[UInt8]()
     var s1 = u16_to_bytes(SIG_ECDSA_SECP256R1_SHA256)
     var s2 = u16_to_bytes(SIG_ECDSA_SECP256R1_SHA384)
-    sigs.append(s1[0])
-    sigs.append(s1[1])
-    sigs.append(s2[0])
-    sigs.append(s2[1])
+    var s3 = u16_to_bytes(SIG_RSA_PSS_RSAE_SHA256)
+    var s4 = u16_to_bytes(SIG_RSA_PKCS1_SHA256)
+    var s5 = u16_to_bytes(SIG_ECDSA_SECP384R1_SHA384)
+    sigs.append(s1[0]); sigs.append(s1[1])
+    sigs.append(s2[0]); sigs.append(s2[1])
+    sigs.append(s3[0]); sigs.append(s3[1])
+    sigs.append(s4[0]); sigs.append(s4[1])
+    sigs.append(s5[0]); sigs.append(s5[1])
     var sigs_len = u16_to_bytes(UInt16(len(sigs)))
     var sigs_data = List[UInt8]()
     sigs_data.append(sigs_len[0])
@@ -776,9 +785,15 @@ struct TLS13Client[T: TLSTransport](Movable):
                     var sig_hash = sha256_bytes(signed)
                     if sig_alg == SIG_ECDSA_SECP256R1_SHA384:
                         sig_hash = sha384_bytes(signed)
-                    if not verify_ecdsa_p256_hash(
-                        self.server_pubkey, sig_hash, sig
-                    ):
+                    
+                    if sig_alg == SIG_RSA_PSS_RSAE_SHA256 or sig_alg == SIG_RSA_PKCS1_SHA256:
+                        verified = verify_rsa_pkcs1v15(self.server_pubkey, signed, sig)
+                    elif sig_alg == SIG_ECDSA_SECP384R1_SHA384:
+                        verified = verify_ecdsa_p384_hash(self.server_pubkey, sig_hash, sig)
+                    else:
+                        verified = verify_ecdsa_p256_hash(self.server_pubkey, sig_hash, sig)
+                        
+                    if not verified:
                         raise Error("TLS handshake: CertificateVerify failed")
                     for b in full:
                         self.transcript.append(b)
