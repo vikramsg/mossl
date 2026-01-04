@@ -217,6 +217,9 @@ fn hostname_matches(cert: ParsedCertificate, hostname: List[UInt8]) -> Bool:
     return False
 
 
+from pki.pem import parse_pem
+from crypto.base64 import base64_decode
+
 struct TrustStore(Movable):
     var roots: List[List[UInt8]]
 
@@ -225,6 +228,38 @@ struct TrustStore(Movable):
 
     fn add_der(mut self, der: List[UInt8]):
         self.roots.append(der.copy())
+
+    fn load_pem(mut self, pem_data: String):
+        var blocks = parse_pem(pem_data)
+        for i in range(len(blocks)):
+            var der = base64_decode(blocks[i])
+            if len(der) > 0:
+                self.add_der(der)
+
+    fn load_from_file(mut self, path: String) raises:
+        var f = open(path, "r")
+        var data = f.read()
+        f.close()
+        self.load_pem(data)
+
+
+fn load_system_trust_store() -> TrustStore:
+    var trust = TrustStore()
+    var paths = List[String]()
+    paths.append("/etc/ssl/certs/ca-certificates.crt")
+    paths.append("/etc/pki/tls/certs/ca-bundle.crt")
+    paths.append("/etc/ssl/ca-bundle.pem")
+    paths.append("/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem")
+    paths.append("/etc/ssl/cert.pem")
+
+    for i in range(len(paths)):
+        try:
+            trust.load_from_file(paths[i])
+            if len(trust.roots) > 0:
+                return trust^
+        except:
+            pass
+    return trust^
 
 
 fn verify_certificate_signature(cert: ParsedCertificate) -> Bool:

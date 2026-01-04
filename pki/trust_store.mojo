@@ -1,9 +1,16 @@
 """Pinned trust store for TLS MVP (ECDSA intermediates)."""
 from collections import List
 
-from pki.x509 import TrustStore
+from pki.x509 import TrustStore, load_system_trust_store
 
 from crypto.bytes import hex_to_bytes
+
+
+fn load_trust_store() -> TrustStore:
+    var trust = load_system_trust_store()
+    if len(trust.roots) > 0:
+        return trust^
+    return load_e7_trust_store()^
 
 
 fn load_e7_trust_store() -> TrustStore:
