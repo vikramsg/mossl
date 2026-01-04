@@ -5,7 +5,9 @@ We will use Quint as a basis for doing spec-based development.
 
 ## 1. What is Quint?
 
-Quint allows you to create **executable specifications**. Unlike a static document, a Quint spec can be simulated, model-checked, and tested. It helps you find "design bugs" (logical flaws in your protocol) before you write a single line of implementation code.
+Quint allows you to create **executable specifications**. 
+Unlike a static document, a Quint spec can be simulated, model-checked, and tested. 
+It helps you find "design bugs" (logical flaws in your protocol) before you write a single line of implementation code.
 
 ## 2. Basic Concepts
 
