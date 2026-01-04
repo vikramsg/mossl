@@ -85,12 +85,25 @@ TCP Socket
 
 | Stage | Spec tests added | Mojo tests added | All tests up to stage pass |
 | --- | --- | --- | --- |
-| Stage 0: Protocol Skeleton | [ ] | [ ] | [ ] |
+| Stage 0: Protocol Skeleton | [x] | [x] | [x] |
 | Stage 1: Hash/MAC/KDF | [x] | [x] | [x] |
 | Stage 2: Key Exchange | [x] | [x] | [x] |
 | Stage 3: Record Layer AEAD | [x] | [x] | [x] |
-| Stage 4: Certificates and Signatures | [ ] | [ ] | [ ] |
+| Stage 4: Certificates and Signatures | [x] | [x] | [x] |
 | Stage 5: lightbug_http Integration | [ ] | [ ] | [ ] |
+
+**Stage 5 status note:** HTTPS is not yet wired end-to-end. The `lightbug_http` client and response parser are hard-typed to `TCPConnection`, so a TLS connection cannot be injected without modifying `lightbug_http`, and the `https://httpbin.org/get` Mojo test is still missing.
+
+### Follow-ups (No Implementation Yet)
+- **Wire TLS into lightbug_http**: Update `lightbug_http.client.Client` to use `TLSSocket` for HTTPS (and keep HTTP on plain TCP).
+- **Real TLS 1.3 handshake**: Replace the abstract handshake skeleton with real message serialization, key schedule derivation, and Finished verification.
+- **Record protection**: Encrypt/decrypt records with AES-GCM using sequence-derived nonces (including content type inner framing).
+- **Trust store loading**: Load system CA bundle(s) per platform and add chain building with intermediates.
+- **End-to-end HTTPS test**: Add a real `https://httpbin.org/get` test once TLS I/O is complete.
+
+#### Feasibility Note (lightbug_http Wiring)
+- **Not plug-and-play today**: `lightbug_http.client.Client` is hard-typed to `TCPConnection`, and `HTTPResponse.from_bytes` also expects `TCPConnection`. This means a `TLSSocket` cannot be injected without modifying `lightbug_http` types.
+- **Required changes to make it feasible**: Generalize the client/pool/response parser to accept the `Connection` trait (or a TLS-capable connection trait), then implement a `TLSConnection` wrapper that satisfies that trait.
 
 ### Running Tests
 - Quint: `npx quint test specs/<spec>.qnt`
