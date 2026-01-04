@@ -8,9 +8,10 @@ from crypto.bytes import hex_to_bytes
 
 fn load_trust_store() -> TrustStore:
     var trust = load_system_trust_store()
-    if len(trust.roots) > 0:
-        return trust
-    return load_e7_trust_store()
+    var pinned = load_e7_trust_store()
+    for i in range(len(pinned.roots)):
+        trust.add_der(pinned.roots[i].copy())
+    return trust^
 
 
 fn load_e7_trust_store() -> TrustStore:
