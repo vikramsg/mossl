@@ -1,56 +1,71 @@
 # Crypto Package
 
 ## Overview
-The `crypto/` directory contains pure Mojo implementations of cryptographic
-primitives required for TLS 1.3 key scheduling:
-- SHA-256
-- HMAC-SHA256
-- HKDF (RFC 5869)
+`crypto/` is the pure‑Mojo cryptography layer that makes TLS 1.3 possible in
+this repo. Each module exists because a specific TLS 1.3 step depends on it:
+key schedule, key agreement, or record protection. Every primitive is tested
+against published vectors to ensure byte‑exact correctness.
 
-These are implemented without external language bindings and validated with
-RFC test vectors.
+## What Each Module Is For
 
-## Components
+### `crypto/bytes.mojo`
+Utility helpers for hex parsing/formatting. This is the glue that lets tests
+consume RFC vectors and compare outputs as hex strings.
 
-### Modules
-- `crypto/bytes.mojo`
-  - Hex parsing and formatting helpers for test vectors.
-- `crypto/sha256.mojo`
-  - SHA-256 implementation with padding and compression.
-- `crypto/hmac.mojo`
-  - HMAC-SHA256 built on `crypto/sha256.mojo`.
-- `crypto/hkdf.mojo`
-  - HKDF extract/expand built on `crypto/hmac.mojo`.
+### `crypto/sha256.mojo`
+TLS 1.3 uses SHA‑256 for transcript hashing and as the hash function inside
+HKDF. Without this, the key schedule can’t be reproduced correctly.
 
-### Data Flow
+### `crypto/hmac.mojo`
+HKDF is built on HMAC. TLS 1.3 uses HMAC‑SHA256 as the core primitive to
+extract and expand secrets.
+
+### `crypto/hkdf.mojo`
+Implements RFC 5869 HKDF (extract/expand). TLS 1.3 derives handshake and
+application traffic keys with HKDF, so this is the backbone of the key schedule.
+
+### `crypto/x25519.mojo`
+Implements X25519 (RFC 7748) for ECDHE. TLS 1.3 uses X25519 to derive the
+shared secret during the handshake.
+
+### `crypto/aes_gcm.mojo`
+Implements AES‑128 and GCM mode. TLS 1.3 record protection requires an AEAD;
+AES‑GCM is the cipher suite for the current stage.
+
+## Dependencies Between Modules
 ```
 bytes.mojo  -> sha256.mojo
 sha256.mojo -> hmac.mojo
 hmac.mojo   -> hkdf.mojo
+bytes.mojo  -> x25519.mojo
+bytes.mojo  -> aes_gcm.mojo
 ```
 
 ## Testing
 
 ### Mojo Tests
-Mojo tests live under `tests/` and use RFC vectors:
+
+Tests use RFC vectors to validate correctness:
 - `tests/test_sha256.mojo`
 - `tests/test_hmac.mojo`
 - `tests/test_hkdf.mojo`
+- `tests/test_x25519.mojo`
+- `tests/test_aes_gcm.mojo`
 
-### What "RFC vectors" mean
-RFC test vectors are published, fixed input/output pairs in standards
-documents. They let us verify an implementation by comparing its output to the
-official expected output for the same inputs. If a vector fails, the
-implementation is incorrect or wired incorrectly (e.g., wrong padding, wrong
-byte order, wrong key scheduling).
+### Why Vectors Matter
+
+Vector tests are fixed, published input/output pairs from standards. If any
+vector fails, the implementation is wrong (padding, endianness, or algorithmic
+errors). These are non‑negotiable for cryptography correctness.
 
 ### Commands
-Run all Stage 1 tests:
+
+Run crypto tests:
 ```
-pixi run test-stage1
+pixi run test-crypto
 ```
 
-Run all Stage 1 Quint specs:
+Run TLS tests:
 ```
-pixi run test-specs
+pixi run test-tls
 ```
