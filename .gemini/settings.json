@@ -3,15 +3,7 @@
       "autoAccept": true
     },
     "context": {
-      "fileName": "CLAUDE.md"
-    },
-    "general": {
-      "preferredEditor": "cursor"
-    },
-    "security": {
-      "auth": {
-        "selectedType": "vertex-ai"
-      }
+      "fileName": "AGENTS.md"
     },
     "model": {
       "name": "gemini-3-flash-preview"

@@ -42,12 +42,18 @@ fi
 # Install pixi dependencies
 pixi install
 
-# Install Gemini CLI
-# Find npm path and use it with sudo, or install without sudo if possible
+# Configure npm to install global packages in user directory (no sudo needed)
 if command -v npm &> /dev/null; then
-    NPM_PATH=$(command -v npm)
+    # Set npm prefix to user directory
+    mkdir -p ~/.npm-global
+    npm config set prefix '~/.npm-global'
+    export PATH=~/.npm-global/bin:$PATH
+    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.zshrc
+    
+    # Install Gemini CLI without sudo
     echo "Installing Gemini CLI..."
-    sudo env PATH="$PATH" "$NPM_PATH" install -g @google/gemini-cli
+    npm install -g @google/gemini-cli
 else
     echo "Warning: npm not found. Skipping Gemini CLI installation."
 fi
