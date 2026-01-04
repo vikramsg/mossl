@@ -12,8 +12,7 @@
     },
     "mounts": [
         "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
-        "source=${localEnv:HOME}/.ssh,target=/tmp/host-ssh,type=bind,consistency=cached",
-        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.config/gcloud,target=/home/vscode/.config/gcloud,type=bind,consistency=cached"
+        "source=${localEnv:HOME}/.ssh,target=/tmp/host-ssh,type=bind,consistency=cached"
     ],
     "customizations": {
         "vscode": {
