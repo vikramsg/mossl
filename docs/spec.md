@@ -21,7 +21,7 @@
 
 ### Stage 2: Key Exchange
 - **Key Exchange**: X25519 for ECDHE.
-- **BigInt Library**: Minimal BigInt support as required for curve operations.
+ - **BigInt Library**: Not required for X25519 (fixed-limb implementation). Defer minimal BigInt to the stage that introduces curves or algorithms that need arbitrary-precision math.
 - **Specs + Tests**: Quint spec defines generic shared-secret agreement; Mojo tests include known vectors.
 
 ### Stage 3: Record Layer AEAD
@@ -33,6 +33,7 @@
 - **ASN.1 Decoder**: Parse DER.
 - **X.509 Parser**: Extract public keys and extensions.
 - **Signature Verification**: ECDSA P-256 (add RSA later if needed).
+- **BigInt Library**: Minimal BigInt support for ECDSA P-256 field arithmetic (or equivalent fixed-limb field implementation).
 - **Trust Store**: Load system CA bundle, verify chain and hostname.
 - **Specs + Tests**: Quint specs define generic signature and chain gating; Mojo tests validate known-good and known-bad chains.
 
@@ -86,8 +87,8 @@ TCP Socket
 | --- | --- | --- | --- |
 | Stage 0: Protocol Skeleton | [ ] | [ ] | [ ] |
 | Stage 1: Hash/MAC/KDF | [x] | [x] | [x] |
-| Stage 2: Key Exchange | [ ] | [ ] | [ ] |
-| Stage 3: Record Layer AEAD | [ ] | [ ] | [ ] |
+| Stage 2: Key Exchange | [x] | [x] | [x] |
+| Stage 3: Record Layer AEAD | [x] | [x] | [x] |
 | Stage 4: Certificates and Signatures | [ ] | [ ] | [ ] |
 | Stage 5: lightbug_http Integration | [ ] | [ ] | [ ] |
 

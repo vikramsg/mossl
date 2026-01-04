@@ -3,7 +3,19 @@
 This document helps agents work within the project.
 This project uses the Mojo programming language and the Pixi package manager.
 
-## Mojo and Pixi
+## Mojo 
+
+### Mojo Tip: List Comprehension
+Mojo supports list comprehensions. For example, to build a `List[UInt8]` of 16 zeros:
+
+```mojo
+var block: List[UInt8] = [UInt8(0) for _ in range(16)]
+```
+
+### Mojo Tip: Prefer @fieldwise_init When Appropriate
+When a struct’s fields can be initialized directly from constructor arguments (no custom logic or defaults), prefer `@fieldwise_init` to reduce boilerplate in `__init__`.
+
+## Pixi
 
 ### Pixi Configuration
 
