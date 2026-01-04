@@ -1,6 +1,8 @@
 from collections import List
 from testing import assert_equal
 
+from crypto.bytes import hex_to_bytes
+
 from pki.x509 import (
     parse_certificate,
     verify_certificate_signature,
@@ -8,8 +10,6 @@ from pki.x509 import (
     verify_chain,
     hostname_matches,
 )
-
-from crypto.bytes import hex_to_bytes
 
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
 

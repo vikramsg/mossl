@@ -22,7 +22,7 @@ fn is_local(m: String) -> Bool:
 
 
 fn sort_list(mut l: List[String]):
-    for i in range(len(l)):
+    for _ in range(len(l)):
         for j in range(len(l) - 1):
             if l[j] > l[j + 1]:
                 var tmp = l[j]
@@ -46,6 +46,7 @@ fn sort_mojo_imports(file_path: String) raises:
     var leading_lines = List[String]()
 
     var stage = 0  # 0: leading (docstrings/comments), 1: imports, 2: code
+    var in_parens = False
 
     for i in range(len(lines)):
         var line = String(lines[i])
@@ -63,7 +64,18 @@ fn sort_mojo_imports(file_path: String) raises:
                 continue
 
         if stage == 1:
+            if in_parens:
+                other_lines.append(line)
+                if l.endswith(")"):
+                    in_parens = False
+                continue
+
             if l.startswith("from ") or l.startswith("import "):
+                if l.endswith("("):
+                    in_parens = True
+                    other_lines.append(line)
+                    continue
+
                 var parts = l.split(" ")
                 var module_name = String("")
                 if len(parts) > 1:

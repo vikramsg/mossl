@@ -1,6 +1,8 @@
 """Minimal X.509 parser and verification helpers (Stage 4)."""
 from collections import List
 
+from pki.ecdsa_p256 import verify_ecdsa_p256
+
 from pki.asn1 import (
     DerReader,
     slice_bytes,
@@ -10,7 +12,6 @@ from pki.asn1 import (
     read_bit_string,
     read_octet_string,
 )
-from pki.ecdsa_p256 import verify_ecdsa_p256
 
 
 @fieldwise_init
