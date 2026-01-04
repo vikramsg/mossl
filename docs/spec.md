@@ -1,4 +1,5 @@
 # HTTPS GET Enablement Spec (Mojo-Native TLS Plan)
+**PURE MOJO ONLY**: All implementations must be in Mojo; no Python or external language bindings.
 
 ## Roadmap for `MojoTLS` (Secure MVP, Native Implementation)
 
@@ -15,24 +16,24 @@
 - **Hashing**: SHA-256 (SHA-384 optional for later).
 - **MAC**: HMAC-SHA256.
 - **Key Derivation**: HKDF per RFC 5869.
-- **Specs + Tests**: Quint spec covers KDF contracts; Mojo tests use RFC 5869 vectors.
+- **Specs + Tests**: Quint spec defines generic KDF contracts (determinism, length sensitivity, domain separation); Mojo tests use RFC 5869 vectors.
 
 ### Stage 2: Key Exchange
 - **Key Exchange**: X25519 for ECDHE.
 - **BigInt Library**: Minimal BigInt support as required for curve operations.
-- **Specs + Tests**: Quint spec asserts `DH(skA, pkB) == DH(skB, pkA)`; Mojo tests include known vectors.
+- **Specs + Tests**: Quint spec defines generic shared-secret agreement; Mojo tests include known vectors.
 
 ### Stage 3: Record Layer AEAD
 - **AEAD**: AES-GCM-128 for TLS 1.3.
 - **Nonce/Sequence Handling**: Per-record nonce derivation and strict sequence progression.
-- **Specs + Tests**: Quint spec enforces integrity (modified tag fails); Mojo tests flip bits and assert decrypt failure.
+- **Specs + Tests**: Quint spec defines generic AEAD integrity contracts; Mojo tests use known AES-GCM vectors.
 
 ### Stage 4: Certificates and Signatures
 - **ASN.1 Decoder**: Parse DER.
 - **X.509 Parser**: Extract public keys and extensions.
 - **Signature Verification**: ECDSA P-256 (add RSA later if needed).
 - **Trust Store**: Load system CA bundle, verify chain and hostname.
-- **Specs + Tests**: Quint spec requires valid chain and hostname before handshake completes; Mojo tests validate known-good and known-bad cert chains.
+- **Specs + Tests**: Quint specs define generic signature and chain gating; Mojo tests validate known-good and known-bad chains.
 
 ### Stage 5: `lightbug_http` Integration
 - Create a `TLSSocket` wrapper that conforms to the interface expected by `lightbug_http.client.Client`.

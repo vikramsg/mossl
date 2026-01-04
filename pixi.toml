@@ -8,13 +8,15 @@ platforms = ["linux-aarch64", "osx-arm64"]
 
 [tasks]
 test-specs = "npx quint test specs/tls13_protocol.qnt && npx quint test specs/tls13_record.qnt && npx quint test specs/crypto_hkdf.qnt && npx quint test specs/crypto_aead_gcm.qnt && npx quint test specs/crypto_x25519.qnt && npx quint test specs/crypto_sig_x509.qnt && npx quint test specs/tls_integration.qnt"
-test-hkdf = "mojo run tests/hkdf_test.mojo"
-test-aead = "mojo run tests/record_aead_test.mojo"
-test-x25519 = "mojo run tests/x25519_test.mojo"
-test-pki = "mojo run tests/pki_test.mojo"
-test-handshake = "mojo run tests/handshake_test.mojo"
-test-tls-socket = "mojo run tests/tls_socket_test.mojo"
-test-all = { depends-on = ["test-specs", "test-hkdf", "test-aead", "test-x25519", "test-pki", "test-handshake", "test-tls-socket"] }
+test-sha256 = "mojo run -I src -I tests tests/sha256_test.mojo"
+test-hmac = "mojo run -I src -I tests tests/hmac_test.mojo"
+test-hkdf = "mojo run -I src -I tests tests/hkdf_test.mojo"
+test-aead = "mojo run -I src -I tests tests/record_aead_test.mojo"
+test-x25519 = "mojo run -I src -I tests tests/x25519_test.mojo"
+test-pki = "mojo run -I src -I tests tests/pki_test.mojo"
+test-handshake = "mojo run -I src -I tests tests/handshake_test.mojo"
+test-tls-socket = "mojo run -I src -I tests tests/tls_socket_test.mojo"
+test-all = { depends-on = ["test-specs", "test-sha256", "test-hmac", "test-hkdf", "test-aead", "test-x25519", "test-pki", "test-handshake", "test-tls-socket"] }
 
 [dependencies]
 # lightbug_http 0.25.7 does not seem to work
