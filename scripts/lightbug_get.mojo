@@ -1,3 +1,7 @@
+"""
+Usage:
+    pixi run mojo run scripts/lightbug_get.mojo
+"""
 from lightbug_http import HTTPRequest, URI, to_string
 from lightbug_http.client import Client
 
