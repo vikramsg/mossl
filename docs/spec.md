@@ -89,7 +89,7 @@ TCP Socket
 | Stage 1: Hash/MAC/KDF | [x] | [x] | [x] |
 | Stage 2: Key Exchange | [x] | [x] | [x] |
 | Stage 3: Record Layer AEAD | [x] | [x] | [x] |
-| Stage 4: Certificates and Signatures | [ ] | [ ] | [ ] |
+| Stage 4: Certificates and Signatures | [x] | [x] | [x] |
 | Stage 5: lightbug_http Integration | [ ] | [ ] | [ ] |
 
 ### Running Tests
