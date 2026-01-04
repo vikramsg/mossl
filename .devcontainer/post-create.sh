@@ -51,9 +51,9 @@ if command -v npm &> /dev/null; then
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
     echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.zshrc
     
-    # Install Gemini CLI without sudo
+    # Install Coding CLI without sudo
     echo "Installing Gemini CLI..."
-    npm install -g @google/gemini-cli
+    npm install -g @google/gemini-cli  @openai/codex
 else
-    echo "Warning: npm not found. Skipping Gemini CLI installation."
+    echo "Warning: npm not found. Skipping Coding CLI installation."
 fi
