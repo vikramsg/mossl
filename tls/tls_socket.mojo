@@ -1,11 +1,14 @@
 """TLS socket wrapper with handshake gating for lightbug_http integration (Stage 5)."""
 from collections import List
-from memory import Span
+
+from lightbug_http.address import TCPAddr
 from lightbug_http.connection import Connection
 from lightbug_http.io.bytes import Bytes
-from lightbug_http.address import TCPAddr
 from lightbug_http.socket import Socket
+from memory import Span
+
 from tls.handshake import HandshakeEngine
+
 
 trait TLSTransport(Movable):
     fn read(self, mut buf: Bytes) raises -> Int:

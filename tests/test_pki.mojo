@@ -1,9 +1,18 @@
 from collections import List
 from testing import assert_equal
+
+from pki.x509 import (
+    parse_certificate,
+    verify_certificate_signature,
+    TrustStore,
+    verify_chain,
+    hostname_matches,
+)
+
 from crypto.bytes import hex_to_bytes
-from pki.x509 import parse_certificate, verify_certificate_signature, TrustStore, verify_chain, hostname_matches
 
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
+
 
 fn cert_bytes() -> List[UInt8]:
     var hex = "308201993082013fa0030201020214375c9be3a517f7f886e22cd40b00b9e119"
@@ -21,12 +30,14 @@ fn cert_bytes() -> List[UInt8]:
     hex += "f4284f765e08185f95f245313a8ab3eabb34a40967c6d182ec479254c1"
     return hex_to_bytes(hex)
 
+
 fn test_parse_and_verify_cert() raises:
     var cert_der = cert_bytes()
     var cert = parse_certificate(cert_der)
     assert_equal(len(cert.tbs) > 0, True)
     assert_equal(len(cert.public_key), 65)
     assert_equal(verify_certificate_signature(cert), True)
+
 
 fn test_chain_and_hostname() raises:
     var cert_der = cert_bytes()
@@ -38,6 +49,7 @@ fn test_chain_and_hostname() raises:
     trust.add_der(cert_der)
     assert_equal(verify_chain(cert_der, trust, hostname), True)
     assert_equal(verify_chain(cert_der, trust, bad_hostname), False)
+
 
 fn main() raises:
     test_parse_and_verify_cert()

@@ -1,12 +1,14 @@
 """Minimal ASN.1 DER reader helpers for X.509 parsing."""
 from collections import List
 
+
 @fieldwise_init
 struct DerSlice:
     var tag: UInt8
     var start: Int
     var header_len: Int
     var len: Int
+
 
 struct DerReader:
     var data: List[UInt8]
@@ -33,7 +35,7 @@ struct DerReader:
         var first = self.read_u8()
         if first < UInt8(0x80):
             return Int(first)
-        var count = Int(first & UInt8(0x7f))
+        var count = Int(first & UInt8(0x7F))
         var v = 0
         var i = 0
         while i < count:
@@ -49,6 +51,7 @@ struct DerReader:
         self.offset += len
         return DerSlice(tag, start, header_len, len)
 
+
 fn slice_bytes(data: List[UInt8], start: Int, length: Int) -> List[UInt8]:
     var out = List[UInt8]()
     var i = 0
@@ -57,12 +60,16 @@ fn slice_bytes(data: List[UInt8], start: Int, length: Int) -> List[UInt8]:
         i += 1
     return out^
 
+
 fn read_sequence_reader(mut reader: DerReader) -> DerReader:
     var slice = reader.read_tlv()
     if slice.tag != UInt8(0x30):
         return DerReader(List[UInt8]())
-    var value = slice_bytes(reader.data, slice.start + slice.header_len, slice.len)
+    var value = slice_bytes(
+        reader.data, slice.start + slice.header_len, slice.len
+    )
     return DerReader(value)
+
 
 fn read_oid_bytes(mut reader: DerReader) -> List[UInt8]:
     var slice = reader.read_tlv()
@@ -70,11 +77,14 @@ fn read_oid_bytes(mut reader: DerReader) -> List[UInt8]:
         return List[UInt8]()
     return slice_bytes(reader.data, slice.start + slice.header_len, slice.len)
 
+
 fn read_integer_bytes(mut reader: DerReader) -> List[UInt8]:
     var slice = reader.read_tlv()
     if slice.tag != UInt8(0x02):
         return List[UInt8]()
-    var bytes = slice_bytes(reader.data, slice.start + slice.header_len, slice.len)
+    var bytes = slice_bytes(
+        reader.data, slice.start + slice.header_len, slice.len
+    )
     # Trim leading zero for positive integers.
     if len(bytes) > 0 and bytes[0] == UInt8(0x00):
         var trimmed = List[UInt8]()
@@ -85,11 +95,14 @@ fn read_integer_bytes(mut reader: DerReader) -> List[UInt8]:
         return trimmed^
     return bytes^
 
+
 fn read_bit_string(mut reader: DerReader) -> List[UInt8]:
     var slice = reader.read_tlv()
     if slice.tag != UInt8(0x03):
         return List[UInt8]()
-    var bytes = slice_bytes(reader.data, slice.start + slice.header_len, slice.len)
+    var bytes = slice_bytes(
+        reader.data, slice.start + slice.header_len, slice.len
+    )
     if len(bytes) == 0:
         return List[UInt8]()
     var out = List[UInt8]()
@@ -99,11 +112,13 @@ fn read_bit_string(mut reader: DerReader) -> List[UInt8]:
         i += 1
     return out^
 
+
 fn read_octet_string(mut reader: DerReader) -> List[UInt8]:
     var slice = reader.read_tlv()
     if slice.tag != UInt8(0x04):
         return List[UInt8]()
     return slice_bytes(reader.data, slice.start + slice.header_len, slice.len)
+
 
 fn read_any(mut reader: DerReader) -> List[UInt8]:
     var slice = reader.read_tlv()

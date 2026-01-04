@@ -1,6 +1,7 @@
 """Minimal 256-bit big integer helpers for P-256 ECDSA."""
 from collections import List
 
+
 fn u256_from_be(bytes: List[UInt8]) -> List[UInt64]:
     var limbs = List[UInt64]()
     # Pad/truncate to 32 bytes.
@@ -32,6 +33,7 @@ fn u256_from_be(bytes: List[UInt8]) -> List[UInt64]:
         limb += 1
     return limbs^
 
+
 fn u256_to_be(limbs: List[UInt64]) -> List[UInt8]:
     var out = List[UInt8]()
     var i = 3
@@ -40,10 +42,11 @@ fn u256_to_be(limbs: List[UInt64]) -> List[UInt8]:
         var j = 0
         while j < 8:
             var shift = (7 - j) * 8
-            out.append(UInt8((v >> shift) & UInt64(0xff)))
+            out.append(UInt8((v >> shift) & UInt64(0xFF)))
             j += 1
         i -= 1
     return out^
+
 
 fn trim_limbs(limbs: List[UInt64]) -> List[UInt64]:
     var out = limbs.copy()
@@ -55,11 +58,13 @@ fn trim_limbs(limbs: List[UInt64]) -> List[UInt64]:
         i -= 1
     return out^
 
+
 fn pad_limbs(limbs: List[UInt64], length: Int) -> List[UInt64]:
     var out = limbs.copy()
     while len(out) < length:
         out.append(UInt64(0))
     return out^
+
 
 fn cmp_limbs(a: List[UInt64], b: List[UInt64]) -> Int:
     var aa = trim_limbs(a)
@@ -77,6 +82,7 @@ fn cmp_limbs(a: List[UInt64], b: List[UInt64]) -> Int:
         i -= 1
     return 0
 
+
 fn add_limbs(a: List[UInt64], b: List[UInt64]) -> (List[UInt64], UInt64):
     var max_len = len(a)
     if len(b) > max_len:
@@ -88,10 +94,11 @@ fn add_limbs(a: List[UInt64], b: List[UInt64]) -> (List[UInt64], UInt64):
     var i = 0
     while i < max_len:
         var sum = UInt128(aa[i]) + UInt128(bb[i]) + carry
-        out.append(UInt64(sum & UInt128(0xffffffffffffffff)))
+        out.append(UInt64(sum & UInt128(0xFFFFFFFFFFFFFFFF)))
         carry = sum >> 64
         i += 1
     return (out^, UInt64(carry))
+
 
 fn sub_limbs(a: List[UInt64], b: List[UInt64]) -> (List[UInt64], Bool):
     var max_len = len(a)
@@ -104,7 +111,7 @@ fn sub_limbs(a: List[UInt64], b: List[UInt64]) -> (List[UInt64], Bool):
         var ai = aa[i]
         var bi = bb[i]
         var tmp = UInt128(ai) - UInt128(bi) - UInt128(borrow)
-        var val = UInt64(tmp & UInt128(0xffffffffffffffff))
+        var val = UInt64(tmp & UInt128(0xFFFFFFFFFFFFFFFF))
         out.append(val)
         var bi_plus = UInt128(bi) + UInt128(borrow)
         if UInt128(ai) < bi_plus:
@@ -114,16 +121,19 @@ fn sub_limbs(a: List[UInt64], b: List[UInt64]) -> (List[UInt64], Bool):
         i += 1
     return (out^, borrow == UInt64(1))
 
+
 fn is_zero(limbs: List[UInt64]) -> Bool:
     for v in limbs:
         if v != UInt64(0):
             return False
     return True
 
+
 fn is_even(limbs: List[UInt64]) -> Bool:
     if len(limbs) == 0:
         return True
     return (limbs[0] & UInt64(1)) == UInt64(0)
+
 
 fn shr1(limbs: List[UInt64]) -> List[UInt64]:
     var out = limbs.copy()
@@ -135,6 +145,7 @@ fn shr1(limbs: List[UInt64]) -> List[UInt64]:
         carry = v & UInt64(1)
         i -= 1
     return out^
+
 
 fn bit_length(limbs: List[UInt64]) -> Int:
     var i = len(limbs) - 1
@@ -148,6 +159,7 @@ fn bit_length(limbs: List[UInt64]) -> Int:
             return i * 64 + bits
         i -= 1
     return 0
+
 
 fn shl_bits(limbs: List[UInt64], shift: Int) -> List[UInt64]:
     if shift <= 0:
@@ -164,12 +176,13 @@ fn shl_bits(limbs: List[UInt64], shift: Int) -> List[UInt64]:
     while i < len(limbs):
         var v = limbs[i]
         var combined = (UInt128(v) << bit_shift) | UInt128(carry)
-        out.append(UInt64(combined & UInt128(0xffffffffffffffff)))
+        out.append(UInt64(combined & UInt128(0xFFFFFFFFFFFFFFFF)))
         carry = UInt64(combined >> 64)
         i += 1
     if carry != UInt64(0):
         out.append(carry)
     return out^
+
 
 fn mul_u256(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     var aa = pad_limbs(a, 4)
@@ -185,18 +198,21 @@ fn mul_u256(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
         var j = 0
         while j < 4:
             var idx = i + j
-            var prod = UInt128(aa[i]) * UInt128(bb[j]) + UInt128(out[idx]) + carry
-            out[idx] = UInt64(prod & UInt128(0xffffffffffffffff))
+            var prod = (
+                UInt128(aa[i]) * UInt128(bb[j]) + UInt128(out[idx]) + carry
+            )
+            out[idx] = UInt64(prod & UInt128(0xFFFFFFFFFFFFFFFF))
             carry = prod >> 64
             j += 1
         var idx2 = i + 4
         while carry != UInt128(0) and idx2 < len(out):
             var sum = UInt128(out[idx2]) + carry
-            out[idx2] = UInt64(sum & UInt128(0xffffffffffffffff))
+            out[idx2] = UInt64(sum & UInt128(0xFFFFFFFFFFFFFFFF))
             carry = sum >> 64
             idx2 += 1
         i += 1
     return out^
+
 
 fn mod_reduce(big: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
     var rem = trim_limbs(big)
@@ -213,12 +229,14 @@ fn mod_reduce(big: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
         rem = trim_limbs(sub[0])
     return pad_limbs(rem, 4)
 
+
 fn add_mod(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
     var sum = add_limbs(a, b)
     var out = pad_limbs(sum[0], 4)
     if sum[1] != UInt64(0) or cmp_limbs(out, mod) >= 0:
         out = sub_limbs(out, mod)[0].copy()
     return pad_limbs(out, 4)
+
 
 fn sub_mod(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
     if cmp_limbs(a, b) >= 0:
@@ -227,9 +245,11 @@ fn sub_mod(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
     var out = sub_limbs(sum[0], b)[0].copy()
     return pad_limbs(out, 4)
 
+
 fn mod_mul(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
     var prod = mul_u256(a, b)
     return mod_reduce(prod, mod)
+
 
 fn get_bit(limbs: List[UInt64], idx: Int) -> UInt64:
     var limb = idx // 64
@@ -238,7 +258,10 @@ fn get_bit(limbs: List[UInt64], idx: Int) -> UInt64:
         return UInt64(0)
     return (limbs[limb] >> bit) & UInt64(1)
 
-fn mod_pow(base: List[UInt64], exp: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
+
+fn mod_pow(
+    base: List[UInt64], exp: List[UInt64], mod: List[UInt64]
+) -> List[UInt64]:
     var result = List[UInt64]()
     result.append(UInt64(1))
     result.append(UInt64(0))
@@ -253,6 +276,7 @@ fn mod_pow(base: List[UInt64], exp: List[UInt64], mod: List[UInt64]) -> List[UIn
         b = mod_mul(b, b, mod)
         i += 1
     return pad_limbs(result, 4)
+
 
 fn mod_inv(a: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
     # Fermat: a^(mod-2) mod mod (mod must be prime).

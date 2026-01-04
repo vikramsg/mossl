@@ -1,9 +1,12 @@
 """ECDSA P-256 verification (affine, minimal)."""
 from collections import List
-from crypto.bytes import hex_to_bytes
-from crypto.sha256 import sha256_bytes
+
 from pki.asn1 import DerReader, read_sequence_reader, read_integer_bytes
 from pki.bigint256 import (
+
+from crypto.bytes import hex_to_bytes
+from crypto.sha256 import sha256_bytes
+
     u256_from_be,
     cmp_limbs,
     is_zero,

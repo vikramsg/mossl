@@ -5,6 +5,7 @@ Usage:
 from lightbug_http import HTTPRequest, URI, to_string
 from lightbug_http.client import Client
 
+
 fn main() raises:
     var client = Client()
     var uri = URI.parse("http://httpbin.org/get")
