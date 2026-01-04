@@ -1,8 +1,8 @@
-# Crypto Package (Stage 1)
+# Crypto Package
 
 ## Overview
-The `crypto/` directory contains pure Mojo implementations of the Stage 1
-cryptographic primitives required for TLS 1.3 key scheduling:
+The `crypto/` directory contains pure Mojo implementations of cryptographic
+primitives required for TLS 1.3 key scheduling:
 - SHA-256
 - HMAC-SHA256
 - HKDF (RFC 5869)
@@ -10,7 +10,9 @@ cryptographic primitives required for TLS 1.3 key scheduling:
 These are implemented without external language bindings and validated with
 RFC test vectors.
 
-## Modules
+## Components
+
+### Modules
 - `crypto/bytes.mojo`
   - Hex parsing and formatting helpers for test vectors.
 - `crypto/sha256.mojo`
@@ -20,19 +22,29 @@ RFC test vectors.
 - `crypto/hkdf.mojo`
   - HKDF extract/expand built on `crypto/hmac.mojo`.
 
-## Data Flow
+### Data Flow
 ```
 bytes.mojo  -> sha256.mojo
 sha256.mojo -> hmac.mojo
 hmac.mojo   -> hkdf.mojo
 ```
 
-## Tests
+## Testing
+
+### Mojo Tests
 Mojo tests live under `tests/` and use RFC vectors:
 - `tests/test_sha256.mojo`
 - `tests/test_hmac.mojo`
 - `tests/test_hkdf.mojo`
 
+### What "RFC vectors" mean
+RFC test vectors are published, fixed input/output pairs in standards
+documents. They let us verify an implementation by comparing its output to the
+official expected output for the same inputs. If a vector fails, the
+implementation is incorrect or wired incorrectly (e.g., wrong padding, wrong
+byte order, wrong key scheduling).
+
+### Commands
 Run all Stage 1 tests:
 ```
 pixi run test-stage1
