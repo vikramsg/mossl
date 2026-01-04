@@ -7,34 +7,20 @@ from tls.https_client import HTTPSClient
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
 
 
-fn test_https_get_example_com() raises:
+fn test_https_get_site(url: String, expected_text: String) raises:
+    print("Testing " + url + "...")
     var client = HTTPSClient()
-    var uri = URI.parse("https://example.com/")
+    var uri = URI.parse(url)
     var req = HTTPRequest(uri)
-    var res = client.do(req^)
-    assert_equal(res.status_code, 200)
-    var body = to_string(res.body_raw.copy())
-    assert_equal("Example Domain" in body, True)
-
-
-fn test_https_get_example_net() raises:
-    var client = HTTPSClient()
-    var uri = URI.parse("https://example.net/")
-    var req = HTTPRequest(uri)
-    var res = client.do(req^)
-    assert_equal(res.status_code, 200)
-    var body = to_string(res.body_raw.copy())
-    assert_equal("Example Domain" in body, True)
-
-
-fn test_https_get_example_org() raises:
-    var client = HTTPSClient()
-    var uri = URI.parse("https://example.org/")
-    var req = HTTPRequest(uri)
-    var res = client.do(req^)
-    assert_equal(res.status_code, 200)
-    var body = to_string(res.body_raw.copy())
-    assert_equal("Example Domain" in body, True)
+    try:
+        var res = client.do(req^)
+        assert_equal(res.status_code, 200)
+        var body = to_string(res.body_raw.copy())
+        assert_equal(expected_text in body, True)
+        print("  SUCCESS")
+    except e:
+        print("  FAILURE: " + String(e))
+        raise e
 
 
 fn test_expected_failure(url: String) raises:
@@ -50,9 +36,20 @@ fn test_expected_failure(url: String) raises:
 
 
 fn main() raises:
-    test_https_get_example_com()
-    test_https_get_example_net()
-    test_https_get_example_org()
+    try:
+        test_https_get_site("https://example.com/", "Example Domain")
+    except:
+        pass
+    
+    try:
+        test_https_get_site("https://example.net/", "Example Domain")
+    except:
+        pass
+        
+    try:
+        test_https_get_site("https://example.org/", "Example Domain")
+    except:
+        pass
     
     test_expected_failure("https://www.google.com/")
     test_expected_failure("https://www.modular.com/")

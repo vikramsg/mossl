@@ -220,6 +220,7 @@ fn hostname_matches(cert: ParsedCertificate, hostname: List[UInt8]) -> Bool:
 from pki.pem import parse_pem
 from crypto.base64 import base64_decode
 
+
 struct TrustStore(Movable):
     var roots: List[List[UInt8]]
 
