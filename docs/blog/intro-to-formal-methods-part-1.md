@@ -134,18 +134,18 @@ Next, we define what *can* happen. These are the rules of the road.
 ```
 
 This is very readable. 
-Now, let's go over what the snipper says.
+Now, let's go over what the snippet says.
 First note that there is no explicit ordering.
 We are not saying "Run `SendSyn` then `ReceiveSyn`".
 
 In Quint, these actions are a menu of choices.
-At every step, the system (Quint simulator) asks: "Which of these actions is allowed to happen right now?",
+At every step, the system (the Quint simulator) asks: "Which of these actions is allowed to happen right now?",
 for example,
 at the beginning everyone is `INIT`.
 
 -   Can `ReceiveSyn` happen? No. It requires `client_state == SYN_SENT`.
 -   Can `SendSyn` happen? Yes. It requires `client_state == INIT`.
--   So, the system picks `SendSyn`.
+-   So, the simulator picks `SendSyn`.
 
 The order isn't hardcoded. The order emerges from the logic.
 
@@ -179,11 +179,16 @@ We fix the logic in the spec, long before we've written a single line of C or Ru
 
 ### Recap
 
+To summarize, with Quint we get:
+1.  **A Readable Spec**: A precise description of the system (State & Transitions) that is easy to read.
+2.  **Simulation**: A way to run the spec and explore behaviors (like fuzzing).
+3.  **Invariants**: A way to define properties that must *always* be true.
+
 ## What's Next?
 
 So we have a verified spec. 
 We know our logic is sound. 
-We know that our state machine doesn't deadlock and respects our safety properties.
+We know that our state machine respects our safety properties.
 
 But a spec in a file is just some text (or outdated documentation!). 
 How do we ensure our *actual* code implements this logic correctly?
