@@ -747,11 +747,6 @@ struct TLS13Client[T: TLSTransport](Movable):
                         if ext_len_cert > 0:
                             _ = list_cur.read_bytes(ext_len_cert)
 
-                    print(
-                        "  Received "
-                        + String(len(cert_list))
-                        + " certificates from server"
-                    )
                     if len(cert_list) > 0:
                         var leaf_der = cert_list[0].copy()
                         var parsed = parse_certificate(leaf_der)

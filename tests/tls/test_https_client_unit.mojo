@@ -1,15 +1,16 @@
 from testing import assert_equal, assert_true
-from lightbug_http.io.bytes import Bytes, byte
+import time
+
+from lightbug_http.address import TCPAddr
+from lightbug_http.connection import default_buffer_size
 from lightbug_http.header import HeaderKey, Headers
 from lightbug_http.http import HTTPResponse, HTTPRequest
-from lightbug_http.connection import default_buffer_size
-from lightbug_http.address import TCPAddr
-import time
+from lightbug_http.io.bytes import Bytes, byte
 
 from tls.https_client import HTTPReader, _read_until_eof, _read_response
 
 
-struct MockHTTPReader(Movable, HTTPReader):
+struct MockHTTPReader(HTTPReader, Movable):
     var data: Bytes
     var read_pos: Int
     var stall: Bool
@@ -53,12 +54,12 @@ fn test_read_until_eof_timeout() raises:
 
 fn test_read_response_content_length_zero() raises:
     print("Testing _read_response with Content-Length: 0 (should not stall)...")
-    var raw = String("HTTP/1.1 301 Moved Permanently\r\n") + String(
-        "Location: https://github.com/\r\n"
-    ) + String("Content-Length: 0\r\n") + String(
-        "Connection: keep-alive\r\n"
-    ) + String(
-        "\r\n"
+    var raw = (
+        String("HTTP/1.1 301 Moved Permanently\r\n")
+        + String("Location: https://github.com/\r\n")
+        + String("Content-Length: 0\r\n")
+        + String("Connection: keep-alive\r\n")
+        + String("\r\n")
     )
 
     var initial = Bytes()
