@@ -29,4 +29,32 @@ BigInt ModPow (2048-bit) (Python): 3316.29 ops/sec
 ## Future Optimization Work
 
 - **Optimize ECDSA P-384**: The current implementation likely uses basic affine coordinates and lacks windowed scalar multiplication. Implementing projective/Jacobian coordinates and precomputed tables (e.g., wNAF) is essential to close the 4000x gap.
+
 - **Connection Reuse**: Implementing Keep-Alive in the HTTPS client would reduce the frequency of full TLS handshakes, mitigating the impact of slow crypto.
+
+
+
+## Optimization Prototype Results (Jan 5, 2026)
+
+We prototyped two optimized native Mojo implementations in `bench/`:
+
+1.  **V1 (False SIMD)**: Used `SIMD[DType.uint64, 16]` but processed elements with scalar loops.
+    *   Result: **~138 ops/sec** (~120x baseline).
+    *   Bottleneck: Register thrashing (moving between vector and scalar units), lack of true vectorization due to carry dependencies.
+
+2.  **V2 (Unrolled Scalar)**: removed `SIMD` entirely, used `UnsafePointer` for stack allocation, and fully unrolled the 6-limb Montgomery multiplication and reduction loops.
+    *   Result: **~578 ops/sec** (~500x baseline).
+    *   **Key Insight**: For small, fixed-size fields (384-bit = 6 limbs), fully unrolled scalar arithmetic is significantly faster than "fake" SIMD because it keeps values in general-purpose registers and eliminates loop overhead. Mojo's `UInt128` arithmetic is efficient enough when not impeded by vector abstraction overhead.
+
+3.  **V3 (Static + Windowed)**: Built upon V2 by replacing dynamic `List` with stack-allocated `InlineArray`, removing `BigInt` from the critical path (using `U384` Montgomery arithmetic for scalars), and implementing windowed scalar multiplication.
+    *   Result: **~2160 ops/sec** (~1800x baseline).
+    *   **Key Insight**: Eliminating heap allocations and using windowed scalar multiplication provided another ~4x speedup. Performance is now within 2x of optimized C/Python (~4600 ops/sec).
+
+**Conclusion:**
+Pure Mojo has achieved excellent cryptographic performance (~2160 verifications/sec) without inline assembly. This demonstrates that by avoiding dynamic allocations and leveraging static system programming features (`InlineArray`, `fn`), Mojo can compete with native implementations.
+The remaining gap to native C (~4600 ops/sec) is likely due to:
+*   Lack of specific `mulx`/`adcx` assembly instructions (Mojo/LLVM might not generate these automatically).
+*   Further algorithmic tuning (e.g. larger window sizes, endomorphism optimizations).
+
+This performance level is more than sufficient for the HTTPS test suite.
+
