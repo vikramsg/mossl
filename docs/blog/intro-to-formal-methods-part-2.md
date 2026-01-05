@@ -62,6 +62,8 @@ This produces a JSON file that looks roughly like this:
 ```
 
 It captures the exact state of the system at every step.
+Note that this is just *one* possible execution path. 
+In the "Scaling Up" section below, we will discuss how to test against many random traces.
 
 ### Step 2: The Mojo Implementation
 
@@ -151,22 +153,44 @@ In this simple TCP example, the logic is linear, so every random trace looks ide
 However, for complex protocols, we typically run this process in a loop (generating 100+ traces).
 Since Quint picks random paths, this effectively fuzzes our Mojo implementation against the spec.
 
+However, note that the scale of this approach has a limit. 
+More complicated specs have many different trace paths.
+And we cannot possibly test again all of them. 
+But testing a sample of traces is definitely better than none. 
+
 ### What about Invariants?
 
 You might ask: "Where are we checking the invariants (like `Safety`) in the Mojo test?"
-The answer is: **We don't.**
-Quint checks the invariants during the simulation phase.
-If a sequence of steps leads to a violation, Quint reports it immediately.
-The job of the Mojo test is purely to ensure **Code implementation conforms to the Spec**.
-By transitivity: if the Spec is verified safe, and the Code matches the Spec, the Code is safe.
+Well, we don't, Quint does!
+During the simulation phase, if a sequence of steps leads to a violation, 
+Quint reports it as a `Violation Error`.
+The job of the tracing test is purely to ensure that the code conforms to the spec.
+And if the code matches the spec, then we will be reasonably confident that the code is correct.
+
+### The Caveat: We still need Unit Tests
+
+Formal methods are great for logic and state machines, but they don't replace unit tests entirely.
+Specs often abstract away details.
+For example, in TLS, the spec might say:
+
+```quint
+action Encrypt = {
+  encrypted_data' = encrypt(data, key)
+}
+```
+
+The spec assumes `encrypt` works mathematically.
+It doesn't check if your AES-GCM implementation handles padding correctly, or if you have an off-by-one error in your buffer allocation.
+For those lower-level implementation details, standard unit tests are still required.
+We use formal methods to verify the orchestration and logic, and unit tests to verify the primitives.
 
 ## Conclusion
 
-We've gone from a high-level requirement ("The connection must be safe") -> TLA+ style logic (Quint) -> Verification (Model Checking) -> Concrete Implementation (Mojo) -> Verified Code.
+We've gone from a high-level requirement ("The connection must be safe") -> Formal spec (Quint) -> Verification (Model Checking) -> Concrete Implementation (A toy one but you get the point) -> Verified Code.
 
-This might seem like overkill for a simple handshake.
-But for complex protocols (like TLS 1.3, Raft, or Byzantine Fault Tolerance), where the number of states explodes, this approach is a lifesaver.
-It allows us to "think" in the spec and "build" in the code, with a machine-verified bridge in between.
-
-In this project (`ssl.mojo`), we are using this exact methodology to implement TLS.
-You can find the specs in the `specs/` folder and the corresponding trace tests in `tests/trace_config.json`.
+But how does this help us with AI (remember I mentioned it last time). 
+Instead of struggling with English and producing concrete requirements,
+we can collaborate with our favourite agent (mine is Opus 4.5 within Claude Code at the time of writing this post)
+to produce a spec for the set of components we are building.
+And if the tooling is in place, we can just tell the agent to build the component, 
+and the trace tests will make sure we adhere to the spec.
