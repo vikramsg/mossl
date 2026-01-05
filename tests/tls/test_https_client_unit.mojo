@@ -8,6 +8,7 @@ import time
 
 from tls.https_client import HTTPReader, _read_until_eof, _read_response
 
+
 struct MockHTTPReader(Movable, HTTPReader):
     var data: Bytes
     var read_pos: Int
@@ -25,53 +26,62 @@ struct MockHTTPReader(Movable, HTTPReader):
                 time.sleep(0.1)
                 return 0
             raise Error("EOF")
-        
+
         var to_read = min(buf.capacity, len(self.data) - self.read_pos)
         for i in range(to_read):
             buf[i] = self.data[self.read_pos + i]
         self.read_pos += to_read
         return UInt(to_read)
 
+
 fn test_read_until_eof_timeout() raises:
     print("Testing _read_until_eof timeout...")
     var reader = MockHTTPReader(stall=True)
-    
+
     var start = time.perf_counter()
     # 0.2s timeout, should hit it after ~2 reads (each sleeps 0.1s)
     var res = _read_until_eof(reader, timeout_seconds=0.2)
     var end = time.perf_counter()
-    
+
     var duration = end - start
     print("Stalling read took: " + String(duration) + "s")
-    
+
     assert_true(duration >= 0.2, "Should have waited at least the timeout")
     assert_true(duration < 1.0, "Should have timed out reasonably fast")
     assert_equal(len(res), 0, "Should have returned empty bytes on timeout")
 
+
 fn test_read_response_content_length_zero() raises:
     print("Testing _read_response with Content-Length: 0 (should not stall)...")
-    var raw = "HTTP/1.1 301 Moved Permanently\r\n"
-            + "Location: https://github.com/\r\n"
-            + "Content-Length: 0\r\n"
-            + "Connection: keep-alive\r\n"
-            + "\r\n"
-    
+    var raw = String("HTTP/1.1 301 Moved Permanently\r\n") + String(
+        "Location: https://github.com/\r\n"
+    ) + String("Content-Length: 0\r\n") + String(
+        "Connection: keep-alive\r\n"
+    ) + String(
+        "\r\n"
+    )
+
     var initial = Bytes()
     for i in range(len(raw)):
         initial.append(byte(String(raw[i])))
-        
+
     var reader = MockHTTPReader(stall=True)
-    
+
     var start = time.perf_counter()
     var res = _read_response(reader, initial^)
     var end = time.perf_counter()
-    
+
     var duration = end - start
     print("Response parsing took: " + String(duration) + "s")
-    
-    assert_true(duration < 0.1, "Should have returned immediately without stalling")
+
+    assert_true(
+        duration < 0.1, "Should have returned immediately without stalling"
+    )
     assert_equal(res.status_code, 301)
-    assert_equal(res.headers.get(HeaderKey.LOCATION).value(), "https://github.com/")
+    assert_equal(
+        res.headers.get(HeaderKey.LOCATION).value(), "https://github.com/"
+    )
+
 
 fn main() raises:
     test_read_until_eof_timeout()
