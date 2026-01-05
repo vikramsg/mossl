@@ -1,6 +1,7 @@
 """Minimal TLS 1.3 client implementation (single cipher suite)."""
 from collections import List
 
+from crypto_instrumented.aes_gcm import aes_gcm_seal, aes_gcm_open
 from lightbug_http.address import TCPAddr
 from lightbug_http.io.bytes import Bytes
 from memory import Span
@@ -10,13 +11,12 @@ from pki_instrumented.rsa import verify_rsa_pkcs1v15, verify_rsa_pss_sha256
 from pki_instrumented.trust_store import load_trust_store
 from pki_instrumented.x509 import parse_certificate, verify_chain
 
-from crypto.aes_gcm import aes_gcm_seal, aes_gcm_open
-from crypto.bytes import concat_bytes, zeros
-from crypto.hkdf import hkdf_extract, hkdf_expand
-from crypto.hmac import hmac_sha256
-from crypto.sha256 import sha256_bytes
-from crypto.sha384 import sha384_bytes
-from crypto.x25519 import x25519
+from crypto_instrumented.bytes import concat_bytes, zeros
+from crypto_instrumented.hkdf import hkdf_extract, hkdf_expand
+from crypto_instrumented.hmac import hmac_sha256
+from crypto_instrumented.sha256 import sha256_bytes
+from crypto_instrumented.sha384 import sha384_bytes
+from crypto_instrumented.x25519 import x25519
 from tls.transport import TLSTransport
 
 alias TLS_VERSION = UInt16(0x0303)  # legacy_record_version

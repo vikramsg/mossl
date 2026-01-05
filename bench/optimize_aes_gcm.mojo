@@ -7,7 +7,8 @@ against a fully safe, optimized version (`aes_gcm_seal_safe_dynamic`) that avoid
 Optimization Strategy (Safe & Dynamic):
 1.  **Dynamic Chunking**: Processes variable-sized `List[UInt8]` payloads in 16-byte chunks. 
     Instead of converting the whole list to a stack array, we manually construct SIMD vectors 
-    from the list (`Block16(list[i], list[i+1]...)`). This is safe and allows the compiler 
+from the list (`Block16(list[i], list[i+1]...)`). This is safe and allows the compiler
+
     to vectorize loads/stores without heap allocations in the hot loop.
 2.  **SIMD AES**: Uses `SIMD` registers for all AES state operations (XOR, ShiftRows via shuffle).
     Crucially, SBox lookups are constructed directly into SIMD vectors to avoid stack round-trips.

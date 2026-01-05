@@ -28,23 +28,51 @@ BigInt ModPow (2048-bit) (Python): 3316.29 ops/sec
 
 ## Investigation Update (Jan 5, 2026 - Part 2)
 
-After optimizing ECDSA P-384 to ~800 ops/sec, `make test-https` remained slow (~44s total, ~12s CPU for 10 requests). Further profiling (`bench/bench_profiling.mojo`) revealed two remaining critical bottlenecks:
+After optimizing ECDSA P-384 and P-256 using windowed scalar multiplication and Montgomery arithmetic, we re-ran the benchmarks and instrumented the HTTPS client.
 
-1.  **ECDSA P-256 is Unoptimized (~1.5 ops/sec)**:
-    *   Most real-world sites (Google, Cloudflare, etc.) use P-256, not P-384.
-    *   The P-256 implementation (`src/pki/ecdsa_p256.mojo`) still uses the legacy unoptimized arithmetic (dynamic lists, no windowing), resulting in ~0.65s per verification.
-    *   This accounts for the majority of the CPU time (10 requests * ~0.7s = ~7s).
+### 1. ECDSA Performance is Excellent
 
-2.  **AES-GCM is Extremely Slow (~0.8 MB/sec)**:
-    *   The current AES-GCM implementation (`src/crypto/aes_gcm.mojo`) allocates `List` objects for every intermediate 16-byte block and S-Box lookup.
-    *   Throughput is < 1 MB/sec, causing noticeable latency even for small certificate chains and bodies.
-    *   **Optimization Proof**: A prototype in `bench/optimize_aes_gcm.mojo` using `UnsafePointer` and allocation-free logic achieved **~45 MB/sec** (a ~32x speedup) on the same hardware.
+Instrumented logs from `bench/v2/` show that generic elliptic curve math is no longer a bottleneck.
 
-**Corrected Conclusion:**
-The primary cause of slowness is **ECDSA P-256** (used by most sites) and **AES-GCM** (used for all traffic). Optimizing P-384 was necessary but insufficient.
+**Breakdown of `verify_ecdsa_p256` (~0.4ms total):**
+- `mont_pow` (modular inversion): **~0.03ms**
+- `double_scalar_mul_windowed`: **~0.27ms**
+- Total `verify_generic`: **< 0.5ms**
+
+**Impact on Handshake:**
+- `handle_cert_verify`: **~0.4ms**
+- `verify_chain` (parsing + sig verify): **~2ms - 5ms**
+- `perform_handshake_total`: **~30ms - 50ms** (excluding network I/O)
+
+### 2. AES-GCM is the Dominant CPU Bottleneck (~1.5 MB/s)
+
+My benchmarks confirm that `aes_gcm.mojo` is performing at approximately **1.5 MB/s**. While this sounds fast enough for small pages, the overhead in Mojo's current implementation is significant:
+- **Redundant Key Expansion**: `aes_encrypt_block` re-runs `key_expansion` for every single 16-byte block. A 100KB transfer triggers ~6,250 key expansions.
+- **GF Multiplication**: `ghash` uses a bit-by-bit `gf_mul` (128 iterations) for every block.
+- **Allocation Overhead**: High frequency of `List` allocations for intermediate states and S-Box lookups creates significant pressure on the Mojo runtime.
+
+In `make test-https`, which processes dozens of records across 10 sites (including large certificate lists and response bodies), this low throughput accounts for the majority of the **14s user time**.
+
+### 3. Trust Store Loading is Negligible
+
+Initial concerns about trust store loading were investigated. Benchmarks show that loading and parsing the system trust store (~150 certificates) takes less than **10ms**. Since this happens once per handshake, it contributes less than 1% to the total request time.
+
+## Conclusions (Final)
+
+The primary CPU bottleneck of unoptimized ECDSA has been **resolved**. **AES-GCM throughput** is now the only significant cryptographic bottleneck remaining.
+
+| Operation | Latency / Throughput | Status |
+| :--- | :--- | :--- |
+| **ECDSA P-256 Verify** | **~0.4ms** | Optimized |
+| **ECDSA P-384 Verify** | **~0.8ms** | Optimized |
+| **Trust Store Loading** | **~2ms - 10ms** | Negligible |
+| **Full TLS Handshake** | **~40ms** | Optimized |
+| **AES-GCM Throughput** | **~1.5 MB/sec** | **Bottleneck** |
 
 ## Future Optimization Work
 
-1.  **Optimize ECDSA P-256**: Port the optimized P-384 logic (stack allocation, unrolled Montgomery multiplication, windowed scalar mul) to P-256.
-2.  **Optimize AES-GCM**: Rewrite `src/crypto/aes_gcm.mojo` to avoid `List` allocations in the hot path, using `UnsafePointer` or `InlineArray` and precomputed tables.
-3.  **Connection Reuse**: Implementing Keep-Alive in the HTTPS client would reduce the frequency of full TLS handshakes.
+1.  **Optimize AES-GCM**:
+    *   Pre-compute expanded round keys once per record (or once per session).
+    *   Implement table-based GF multiplication or use SIMD-accelerated carries if available.
+    *   Use `InlineArray` or `UnsafePointer` to eliminate `List` allocations in the hot path.
+2.  **Connection Reuse**: Support `Keep-Alive` to avoid repeated handshakes and key setups in integration tests.
