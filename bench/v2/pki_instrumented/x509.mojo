@@ -1,8 +1,5 @@
-"""Minimal X.509 parser and verification helpers (Stage 4).
-Instrumented for profiling.
-"""
+"""Minimal X.509 parser and verification helpers (Stage 4)."""
 from collections import List
-from time import perf_counter
 
 from pki_instrumented.ecdsa_p256 import verify_ecdsa_p256, verify_ecdsa_p256_hash
 from pki_instrumented.ecdsa_p384 import verify_ecdsa_p384_hash
@@ -19,18 +16,6 @@ from pki_instrumented.asn1 import (
     read_bit_string,
     read_octet_string,
 )
-
-struct Timer:
-    var start: Float64
-    var name: String
-
-    fn __init__(out self, name: String):
-        self.name = name
-        self.start = perf_counter()
-
-    fn stop(self):
-        var end = perf_counter()
-        print("    [PKI-TIMER] " + self.name + ": " + String(end - self.start) + "s")
 
 
 @fieldwise_init
@@ -321,7 +306,6 @@ fn load_system_trust_store() -> TrustStore:
 
 
 fn verify_certificate_signature(cert: ParsedCertificate) raises -> Bool:
-    var t = Timer("verify_certificate_signature")
     var oid_ecdsa_sha256 = List[UInt8]()
     oid_ecdsa_sha256.append(UInt8(0x2A))
     oid_ecdsa_sha256.append(UInt8(0x86))
@@ -359,32 +343,26 @@ fn verify_certificate_signature(cert: ParsedCertificate) raises -> Bool:
     oid_rsa_sha384.append(UInt8(0x86))
     oid_rsa_sha384.append(UInt8(0xF7))
     oid_rsa_sha384.append(UInt8(0x0D))
-    oid_rsa_sha256.append(UInt8(0x01))
-    oid_rsa_sha256.append(UInt8(0x01))
+    oid_rsa_sha384.append(UInt8(0x01))
+    oid_rsa_sha384.append(UInt8(0x01))
     oid_rsa_sha384.append(UInt8(0x0C))
 
-    var res: Bool
     if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
-        res = verify_ecdsa_p256(cert.public_key, cert.tbs, cert.signature)
-    elif oid_equal(cert.signature_oid, oid_ecdsa_sha384):
-        res = verify_ecdsa_p384_hash(
+        return verify_ecdsa_p256(cert.public_key, cert.tbs, cert.signature)
+    if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
+        return verify_ecdsa_p384_hash(
             cert.public_key, sha384_bytes(cert.tbs), cert.signature
         )
-    elif oid_equal(cert.signature_oid, oid_rsa_sha256):
-        res = verify_rsa_pkcs1v15(cert.public_key, cert.tbs, cert.signature)
-    elif oid_equal(cert.signature_oid, oid_rsa_sha384):
-        res = verify_rsa_pkcs1v15(cert.public_key, cert.tbs, cert.signature)
-    else:
-        res = False
-    
-    t.stop()
-    return res
+    if oid_equal(cert.signature_oid, oid_rsa_sha256):
+        return verify_rsa_pkcs1v15(cert.public_key, cert.tbs, cert.signature)
+    if oid_equal(cert.signature_oid, oid_rsa_sha384):
+        return verify_rsa_pkcs1v15(cert.public_key, cert.tbs, cert.signature)
+    return False
 
 
 fn verify_signature_with_issuer(
     cert: ParsedCertificate, issuer_pubkey: List[UInt8]
 ) raises -> Bool:
-    var t = Timer("verify_signature_with_issuer")
     var oid_ecdsa_sha256 = List[UInt8]()
     oid_ecdsa_sha256.append(UInt8(0x2A))
     oid_ecdsa_sha256.append(UInt8(0x86))
@@ -426,37 +404,36 @@ fn verify_signature_with_issuer(
     oid_rsa_sha384.append(UInt8(0x01))
     oid_rsa_sha384.append(UInt8(0x0C))
 
-    var res: Bool
     if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
-        res = verify_ecdsa_p256(issuer_pubkey, cert.tbs, cert.signature)
-    elif oid_equal(cert.signature_oid, oid_ecdsa_sha384):
+        return verify_ecdsa_p256(issuer_pubkey, cert.tbs, cert.signature)
+    if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
         var h = sha384_bytes(cert.tbs)
-        res = verify_ecdsa_p384_hash(issuer_pubkey, h, cert.signature)
-    elif oid_equal(cert.signature_oid, oid_rsa_sha256):
-        res = verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
-    elif oid_equal(cert.signature_oid, oid_rsa_sha384):
-        res = verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
-    else:
-        res = False
-    
-    t.stop()
-    return res
+        var ok = verify_ecdsa_p384_hash(issuer_pubkey, h, cert.signature)
+        if not ok:
+            print(
+                "  ECDSA-SHA384 verification failed for "
+                + to_string(cert.subject_cn)
+            )
+            print("  Issuer key len: " + String(len(issuer_pubkey)))
+            print("  Signature len: " + String(len(cert.signature)))
+        return ok
+    if oid_equal(cert.signature_oid, oid_rsa_sha256):
+        return verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
+    if oid_equal(cert.signature_oid, oid_rsa_sha384):
+        return verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
+    return False
 
 
 fn verify_chain(
     certs: List[List[UInt8]], trust: TrustStore, hostname: List[UInt8]
 ) raises -> Bool:
-    var t = Timer("verify_chain")
     if len(certs) == 0:
-        t.stop()
         return False
     var leaf_der = certs[0].copy()
     var leaf = parse_certificate(leaf_der)
     if len(leaf.tbs) == 0:
-        t.stop()
         return False
     if not hostname_matches(leaf, hostname):
-        t.stop()
         return False
 
     var current_cert = leaf.copy()
@@ -470,7 +447,6 @@ fn verify_chain(
                 continue
             if bytes_equal(current_cert.issuer_cn, root.subject_cn):
                 if verify_signature_with_issuer(current_cert, root.public_key):
-                    t.stop()
                     return True
 
         # If not, check if signed by next intermediate in the provided list
@@ -483,11 +459,8 @@ fn verify_chain(
             if verify_signature_with_issuer(current_cert, next_cert.public_key):
                 current_cert = next_cert.copy()
             else:
-                t.stop()
                 return False
         else:
-            t.stop()
             return False
 
-    t.stop()
     return False

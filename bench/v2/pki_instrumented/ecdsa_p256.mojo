@@ -3,7 +3,7 @@ from collections import List
 from pki_instrumented.asn1 import DerReader, read_sequence_reader, read_integer_bytes
 from pki_instrumented.ec_arithmetic import UIntLimbs, verify_generic, FieldContext
 
-from crypto.sha256 import sha256_bytes
+from crypto_instrumented.sha256 import sha256_bytes
 
 alias U256 = UIntLimbs[4]
 

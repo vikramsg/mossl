@@ -11,6 +11,7 @@ struct Timer:
     fn __init__(out self, name: String):
         self.name = name
         self.start = perf_counter()
+        print("    [DEBUG] Starting " + self.name)
 
     fn stop(self):
         var end = perf_counter()

@@ -354,7 +354,23 @@ fn clamp_scalar(k_in: List[UInt8]) -> List[UInt8]:
     return k^
 
 
+from time import perf_counter
+
+struct Timer:
+    var start: Float64
+    var name: String
+
+    fn __init__(out self, name: String):
+        self.name = name
+        self.start = perf_counter()
+        print("    [X25519-DEBUG] Starting " + self.name)
+
+    fn stop(self):
+        var end = perf_counter()
+        print("    [X25519-TIMER] " + self.name + ": " + String(end - self.start) + "s")
+
 fn x25519(scalar: List[UInt8], u: List[UInt8]) -> List[UInt8]:
+    var t_total = Timer("x25519")
     var k = clamp_scalar(scalar)
     var x1 = fe_from_bytes(u)
     var x2 = fe_one()
@@ -403,4 +419,6 @@ fn x25519(scalar: List[UInt8], u: List[UInt8]) -> List[UInt8]:
 
     var z2_inv = fe_invert(z2)
     var out = fe_mul(x2, z2_inv)
-    return fe_to_bytes(out)
+    var res = fe_to_bytes(out)
+    t_total.stop()
+    return res

@@ -18,6 +18,7 @@ struct Timer:
     fn __init__(out self, name: String):
         self.name = name
         self.start = perf_counter()
+        print("    [DEBUG] Starting " + self.name)
 
     fn stop(self):
         var end = perf_counter()
@@ -490,6 +491,7 @@ fn aes_gcm_open(
     ciphertext: List[UInt8],
     tag: List[UInt8],
 ) -> (List[UInt8], Bool):
+    print("    [AES-DEBUG] aes_gcm_open called, ciphertext len: " + String(len(ciphertext)))
     var t = Timer("aes_gcm_open")
     # 1. Expand Key
     var key_arr = InlineArray[UInt8, 16](0)

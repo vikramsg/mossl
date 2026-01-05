@@ -3,7 +3,7 @@ from collections import List
 
 from pki_instrumented.x509 import TrustStore, load_system_trust_store
 
-from crypto.bytes import hex_to_bytes
+from crypto_instrumented.bytes import hex_to_bytes
 
 
 fn load_trust_store() -> TrustStore:

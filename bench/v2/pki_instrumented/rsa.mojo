@@ -2,8 +2,8 @@ from collections import List
 
 from pki_instrumented.bigint import BigInt, mod_pow
 
-from crypto.sha256 import sha256_bytes
-from crypto.sha384 import sha384_bytes
+from crypto_instrumented.sha256 import sha256_bytes
+from crypto_instrumented.sha384 import sha384_bytes
 
 from pki_instrumented.asn1 import (
     DerReader,
