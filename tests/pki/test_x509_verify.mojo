@@ -19,16 +19,13 @@ fn fixture_path(name: String) -> String:
 
 
 fn test_wikipedia_parsing() raises:
-    print("Testing Wikipedia certificate parsing...")
     var leaf_bytes = read_file_bytes(fixture_path("wiki_leaf.der"))
     var leaf = parse_certificate(leaf_bytes)
     assert_equal(to_string(leaf.subject_cn), "*.wikipedia.org")
     assert_equal(to_string(leaf.issuer_cn), "E8")
-    print("  SUCCESS")
 
 
 fn test_wikipedia_signature() raises:
-    print("Testing Wikipedia signature verification...")
     var leaf_bytes = read_file_bytes(fixture_path("wiki_leaf.der"))
     var inter_bytes = read_file_bytes(fixture_path("wiki_inter.der"))
 
@@ -37,11 +34,9 @@ fn test_wikipedia_signature() raises:
 
     var ok = verify_signature_with_issuer(leaf, inter.public_key)
     assert_equal(ok, True)
-    print("  SUCCESS")
 
 
 fn test_microsoft_signature() raises:
-    print("Testing Microsoft RSA signature verification...")
     var leaf_bytes = read_file_bytes(fixture_path("microsoft_leaf.der"))
     var inter_bytes = read_file_bytes(fixture_path("microsoft_inter.der"))
 
@@ -50,7 +45,6 @@ fn test_microsoft_signature() raises:
 
     var ok = verify_signature_with_issuer(leaf, inter.public_key)
     assert_equal(ok, True)
-    print("  SUCCESS")
 
 
 fn main() raises:
