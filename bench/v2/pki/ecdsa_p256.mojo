@@ -16,8 +16,6 @@ from pki.bigint256 import (
     mod_inv,
     mod_reduce,
 )
-
-
 @fieldwise_init
 struct ECPoint(Movable):
     var x: List[UInt64]

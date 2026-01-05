@@ -11,7 +11,6 @@ from memory import Span
 from tls.connect_https import connect_https
 from tls.tls_socket import TLSSocket, SocketTransport
 
-
 struct TLSConnectionAdapter:
     var tls: TLSSocket[SocketTransport]
     var closed: Bool

@@ -16,8 +16,6 @@ from pki.asn1 import (
     read_bit_string,
     read_octet_string,
 )
-
-
 @fieldwise_init
 struct ParsedCertificate(Movable):
     var tbs: List[UInt8]
@@ -360,9 +358,24 @@ fn verify_certificate_signature(cert: ParsedCertificate) raises -> Bool:
     return False
 
 
+from time import perf_counter
+
+struct Timer:
+    var start: Float64
+    var name: String
+
+    fn __init__(out self, name: String):
+        self.name = name
+        self.start = perf_counter()
+
+    fn stop(self):
+        var end = perf_counter()
+        print("    [PKI-TIMER] " + self.name + ": " + String(end - self.start) + "s")
+
 fn verify_signature_with_issuer(
     cert: ParsedCertificate, issuer_pubkey: List[UInt8]
 ) raises -> Bool:
+    var t = Timer("verify_signature_with_issuer")
     var oid_ecdsa_sha256 = List[UInt8]()
     oid_ecdsa_sha256.append(UInt8(0x2A))
     oid_ecdsa_sha256.append(UInt8(0x86))
@@ -404,11 +417,12 @@ fn verify_signature_with_issuer(
     oid_rsa_sha384.append(UInt8(0x01))
     oid_rsa_sha384.append(UInt8(0x0C))
 
+    var ok: Bool
     if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
-        return verify_ecdsa_p256(issuer_pubkey, cert.tbs, cert.signature)
-    if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
+        ok = verify_ecdsa_p256(issuer_pubkey, cert.tbs, cert.signature)
+    elif oid_equal(cert.signature_oid, oid_ecdsa_sha384):
         var h = sha384_bytes(cert.tbs)
-        var ok = verify_ecdsa_p384_hash(issuer_pubkey, h, cert.signature)
+        ok = verify_ecdsa_p384_hash(issuer_pubkey, h, cert.signature)
         if not ok:
             print(
                 "  ECDSA-SHA384 verification failed for "
@@ -416,17 +430,20 @@ fn verify_signature_with_issuer(
             )
             print("  Issuer key len: " + String(len(issuer_pubkey)))
             print("  Signature len: " + String(len(cert.signature)))
-        return ok
-    if oid_equal(cert.signature_oid, oid_rsa_sha256):
-        return verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
-    if oid_equal(cert.signature_oid, oid_rsa_sha384):
-        return verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
-    return False
+    elif oid_equal(cert.signature_oid, oid_rsa_sha256):
+        ok = verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
+    elif oid_equal(cert.signature_oid, oid_rsa_sha384):
+        ok = verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
+    else:
+        ok = False
+    t.stop()
+    return ok
 
 
 fn verify_chain(
     certs: List[List[UInt8]], trust: TrustStore, hostname: List[UInt8]
 ) raises -> Bool:
+    var t_total = Timer("verify_chain_total")
     if len(certs) == 0:
         return False
     var leaf_der = certs[0].copy()
@@ -439,15 +456,26 @@ fn verify_chain(
     var current_cert = leaf.copy()
     var cert_idx = 0
 
+    print("  Trust store has " + String(len(trust.roots)) + " roots")
+
     while True:
         # Check if current_cert is signed by any root
+        var t_roots = Timer("check_roots")
+        var total_parse_time: Float64 = 0
         for i in range(len(trust.roots)):
+            var start_parse = perf_counter()
             var root = parse_certificate(trust.roots[i])
+            total_parse_time += perf_counter() - start_parse
             if len(root.tbs) == 0:
                 continue
             if bytes_equal(current_cert.issuer_cn, root.subject_cn):
                 if verify_signature_with_issuer(current_cert, root.public_key):
+                    print("    [PKI-TIMER] total_parse_roots_time: " + String(total_parse_time) + "s")
+                    t_roots.stop()
+                    t_total.stop()
                     return True
+        print("    [PKI-TIMER] total_parse_roots_time: " + String(total_parse_time) + "s")
+        t_roots.stop()
 
         # If not, check if signed by next intermediate in the provided list
         cert_idx += 1
@@ -459,8 +487,11 @@ fn verify_chain(
             if verify_signature_with_issuer(current_cert, next_cert.public_key):
                 current_cert = next_cert.copy()
             else:
+                t_total.stop()
                 return False
         else:
+            t_total.stop()
             return False
 
+    t_total.stop()
     return False

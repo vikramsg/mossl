@@ -1,6 +1,7 @@
 from collections import InlineArray
-from memory import UnsafePointer
 from sys import bitwidthof
+
+from memory import UnsafePointer
 
 struct UIntLimbs[N: Int](Copyable, Movable, ImplicitlyCopyable):
     var limbs: InlineArray[UInt64, N]
