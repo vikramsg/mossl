@@ -10,15 +10,12 @@ fn test_https_get_site(url: String, expected_text: String) raises:
     var client = HTTPSClient(allow_redirects=True)
     var uri = URI.parse(url)
     var req = HTTPRequest(uri)
-    try:
-        var res = client.do(req^)
-        assert_equal(res.status_code, 200)
-        var body = to_string(res.body_raw.copy())
-        assert_equal(expected_text in body, True)
-        print("  SUCCESS")
-    except e:
-        print("  FAILURE: " + String(e))
-        raise e
+    var res = client.do(req^)
+    assert_equal(res.status_code, 200)
+    var body = to_string(res.body_raw.copy())
+    assert_equal(expected_text in body, True)
+
+    print("Successfully tested ", url)
 
 
 fn main() raises:
