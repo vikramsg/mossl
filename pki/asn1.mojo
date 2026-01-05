@@ -26,12 +26,14 @@ struct DerReader:
             return UInt8(0)
         return self.data[self.offset]
 
-    fn read_u8(mut self) -> UInt8:
+    fn read_u8(mut self) raises -> UInt8:
+        if self.offset >= len(self.data):
+            raise Error("ASN1: read past end of data")
         var b = self.data[self.offset]
         self.offset += 1
         return b
 
-    fn read_len(mut self) -> Int:
+    fn read_len(mut self) raises -> Int:
         var first = self.read_u8()
         if first < UInt8(0x80):
             return Int(first)
@@ -43,60 +45,74 @@ struct DerReader:
             i += 1
         return v
 
-    fn read_tlv(mut self) -> DerSlice:
+    fn read_tlv(mut self) raises -> DerSlice:
         var start = self.offset
         var tag = self.read_u8()
-        var len = self.read_len()
+        var length = self.read_len()
         var header_len = self.offset - start
-        self.offset += len
-        return DerSlice(tag, start, header_len, len)
+        if self.offset + length > len(self.data):
+            print(
+                "ASN1 Debug: tag="
+                + hex(Int(tag))
+                + " start="
+                + String(start)
+                + " hlen="
+                + String(header_len)
+                + " length="
+                + String(length)
+                + " offset="
+                + String(self.offset)
+                + " data_len="
+                + String(len(self.data))
+            )
+            raise Error("ASN1: TLV length exceeds data")
+        self.offset += length
+        return DerSlice(tag, start, header_len, length)
 
 
 fn slice_bytes(data: List[UInt8], start: Int, length: Int) -> List[UInt8]:
-    var out = List[UInt8]()
-    var i = 0
-    while i < length:
+    var out = List[UInt8](capacity=length)
+    for i in range(length):
         out.append(data[start + i])
-        i += 1
-    return out^
+    return out.copy()
 
 
-fn read_sequence_reader(mut reader: DerReader) -> DerReader:
+fn read_sequence_reader(mut reader: DerReader) raises -> DerReader:
     var slice = reader.read_tlv()
     if slice.tag != UInt8(0x30):
         return DerReader(List[UInt8]())
-    var value = slice_bytes(
-        reader.data, slice.start + slice.header_len, slice.len
+    return DerReader(
+        slice_bytes(
+            reader.data, slice.start + slice.header_len, slice.len
+        ).copy()
     )
-    return DerReader(value)
 
 
-fn read_oid_bytes(mut reader: DerReader) -> List[UInt8]:
+fn read_oid_bytes(mut reader: DerReader) raises -> List[UInt8]:
     var slice = reader.read_tlv()
     if slice.tag != UInt8(0x06):
         return List[UInt8]()
-    return slice_bytes(reader.data, slice.start + slice.header_len, slice.len)
+    return slice_bytes(
+        reader.data, slice.start + slice.header_len, slice.len
+    ).copy()
 
 
-fn read_integer_bytes(mut reader: DerReader) -> List[UInt8]:
+fn read_integer_bytes(mut reader: DerReader) raises -> List[UInt8]:
     var slice = reader.read_tlv()
     if slice.tag != UInt8(0x02):
         return List[UInt8]()
     var bytes = slice_bytes(
         reader.data, slice.start + slice.header_len, slice.len
     )
-    # Trim leading zero for positive integers.
-    if len(bytes) > 0 and bytes[0] == UInt8(0x00):
-        var trimmed = List[UInt8]()
-        var i = 1
-        while i < len(bytes):
+    if len(bytes) > 1 and bytes[0] == 0:
+        var trimmed = List[UInt8](capacity=len(bytes) - 1)
+        for i in range(1, len(bytes)):
             trimmed.append(bytes[i])
-            i += 1
-        return trimmed^
-    return bytes^
+        return trimmed.copy()
+    return bytes.copy()
 
 
-fn read_bit_string(mut reader: DerReader) -> List[UInt8]:
+fn read_bit_string(mut reader: DerReader) raises -> List[UInt8]:
     var slice = reader.read_tlv()
     if slice.tag != UInt8(0x03):
         return List[UInt8]()
@@ -105,21 +121,16 @@ fn read_bit_string(mut reader: DerReader) -> List[UInt8]:
     )
     if len(bytes) == 0:
         return List[UInt8]()
-    var out = List[UInt8]()
-    var i = 1
-    while i < len(bytes):
+    var out = List[UInt8](capacity=len(bytes) - 1)
+    for i in range(1, len(bytes)):
         out.append(bytes[i])
-        i += 1
-    return out^
+    return out.copy()
 
 
-fn read_octet_string(mut reader: DerReader) -> List[UInt8]:
+fn read_octet_string(mut reader: DerReader) raises -> List[UInt8]:
     var slice = reader.read_tlv()
     if slice.tag != UInt8(0x04):
         return List[UInt8]()
-    return slice_bytes(reader.data, slice.start + slice.header_len, slice.len)
-
-
-fn read_any(mut reader: DerReader) -> List[UInt8]:
-    var slice = reader.read_tlv()
-    return slice_bytes(reader.data, slice.start, slice.header_len + slice.len)
+    return slice_bytes(
+        reader.data, slice.start + slice.header_len, slice.len
+    ).copy()

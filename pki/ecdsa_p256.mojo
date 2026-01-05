@@ -243,7 +243,9 @@ fn scalar_mul(k: List[UInt64], p: ECPoint) -> ECPoint:
     return jacobian_to_affine(result)
 
 
-fn parse_ecdsa_signature(sig_der: List[UInt8]) -> (List[UInt64], List[UInt64]):
+fn parse_ecdsa_signature(
+    sig_der: List[UInt8],
+) raises -> (List[UInt64], List[UInt64]):
     var reader = DerReader(sig_der)
     var seq = read_sequence_reader(reader)
     var r_bytes = read_integer_bytes(seq)
@@ -253,7 +255,7 @@ fn parse_ecdsa_signature(sig_der: List[UInt8]) -> (List[UInt64], List[UInt64]):
 
 fn verify_ecdsa_p256_hash(
     pubkey: List[UInt8], hash: List[UInt8], sig_der: List[UInt8]
-) -> Bool:
+) raises -> Bool:
     if len(pubkey) != 65:
         return False
     if pubkey[0] != UInt8(0x04):
@@ -298,5 +300,5 @@ fn verify_ecdsa_p256_hash(
 
 fn verify_ecdsa_p256(
     pubkey: List[UInt8], msg: List[UInt8], sig_der: List[UInt8]
-) -> Bool:
+) raises -> Bool:
     return verify_ecdsa_p256_hash(pubkey, sha256_bytes(msg), sig_der)

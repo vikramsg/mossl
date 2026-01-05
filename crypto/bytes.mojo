@@ -41,12 +41,30 @@ fn hex_nibble(ch: StringSlice) -> UInt8:
 fn hex_to_bytes(hex: String) -> List[UInt8]:
     var out = List[UInt8]()
     var i = 0
-    while i < len(hex):
-        var hi = hex_nibble(hex[i])
-        var lo = hex_nibble(hex[i + 1])
+    var h = hex
+    while i + 1 < len(h):
+        # Skip characters that are not hex
+        if not (
+            (h[i] >= "0" and h[i] <= "9")
+            or (h[i] >= "a" and h[i] <= "f")
+            or (h[i] >= "A" and h[i] <= "F")
+        ):
+            i += 1
+            continue
+        if not (
+            (h[i + 1] >= "0" and h[i + 1] <= "9")
+            or (h[i + 1] >= "a" and h[i + 1] <= "f")
+            or (h[i + 1] >= "A" and h[i + 1] <= "F")
+        ):
+            # This shouldn't happen for valid hex string
+            i += 1
+            continue
+
+        var hi = hex_nibble(h[i])
+        var lo = hex_nibble(h[i + 1])
         out.append(UInt8((hi << 4) | lo))
         i += 2
-    return out^
+    return out.copy()
 
 
 fn bytes_to_hex(bytes: List[UInt8]) -> String:

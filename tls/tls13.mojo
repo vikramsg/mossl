@@ -5,6 +5,8 @@ from lightbug_http.address import TCPAddr
 from lightbug_http.io.bytes import Bytes
 from memory import Span
 from pki.ecdsa_p256 import verify_ecdsa_p256_hash
+from pki.ecdsa_p384 import verify_ecdsa_p384_hash
+from pki.rsa import verify_rsa_pkcs1v15, verify_rsa_pss_sha256
 from pki.trust_store import load_trust_store
 from pki.x509 import parse_certificate, verify_chain
 
@@ -41,8 +43,12 @@ alias EXT_KEY_SHARE = UInt16(0x0033)
 alias GROUP_X25519 = UInt16(0x001D)
 alias CIPHER_TLS_AES_128_GCM_SHA256 = UInt16(0x1301)
 
+alias SIG_RSA_PKCS1_SHA256 = UInt16(0x0401)
+alias SIG_RSA_PKCS1_SHA384 = UInt16(0x0501)
+alias SIG_RSA_PKCS1_SHA512 = UInt16(0x0601)
 alias SIG_ECDSA_SECP256R1_SHA256 = UInt16(0x0403)
-alias SIG_ECDSA_SECP256R1_SHA384 = UInt16(0x0503)
+alias SIG_ECDSA_SECP384R1_SHA384 = UInt16(0x0503)
+alias SIG_RSA_PSS_RSAE_SHA256 = UInt16(0x0804)
 
 
 fn u16_to_bytes(v: UInt16) -> List[UInt8]:
@@ -292,11 +298,20 @@ fn make_client_hello(
     # signature_algorithms
     var sigs = List[UInt8]()
     var s1 = u16_to_bytes(SIG_ECDSA_SECP256R1_SHA256)
-    var s2 = u16_to_bytes(SIG_ECDSA_SECP256R1_SHA384)
+    var s2 = u16_to_bytes(SIG_ECDSA_SECP384R1_SHA384)
+    var s3 = u16_to_bytes(SIG_RSA_PSS_RSAE_SHA256)
+    var s4 = u16_to_bytes(SIG_RSA_PKCS1_SHA256)
+    var s5 = u16_to_bytes(SIG_RSA_PKCS1_SHA384)
     sigs.append(s1[0])
     sigs.append(s1[1])
     sigs.append(s2[0])
     sigs.append(s2[1])
+    sigs.append(s3[0])
+    sigs.append(s3[1])
+    sigs.append(s4[0])
+    sigs.append(s4[1])
+    sigs.append(s5[0])
+    sigs.append(s5[1])
     var sigs_len = u16_to_bytes(UInt16(len(sigs)))
     var sigs_data = List[UInt8]()
     sigs_data.append(sigs_len[0])
@@ -313,22 +328,6 @@ fn make_client_hello(
     for b in sigs_data:
         sigs_ext.append(b)
     for b in sigs_ext:
-        ext.append(b)
-
-    # psk_key_exchange_modes
-    var psk = List[UInt8]()
-    psk.append(UInt8(1))
-    psk.append(UInt8(1))
-    var psk_len = u16_to_bytes(UInt16(len(psk)))
-    var psk_ext = List[UInt8]()
-    var psk_type = u16_to_bytes(EXT_PSK_MODES)
-    psk_ext.append(psk_type[0])
-    psk_ext.append(psk_type[1])
-    psk_ext.append(psk_len[0])
-    psk_ext.append(psk_len[1])
-    for b in psk:
-        psk_ext.append(b)
-    for b in psk_ext:
         ext.append(b)
 
     # key_share
@@ -737,14 +736,29 @@ struct TLS13Client[T: TLSTransport](Movable):
                     var list_len = cert_cur.read_u24()
                     var list_bytes = cert_cur.read_bytes(list_len)
                     var list_cur = ByteCursor(list_bytes)
-                    if list_cur.remaining() > 0:
+
+                    var cert_list = List[List[UInt8]]()
+                    while list_cur.remaining() > 0:
                         var cert_len = list_cur.read_u24()
                         var cert_der = list_cur.read_bytes(cert_len)
-                        var parsed = parse_certificate(cert_der)
+                        cert_list.append(cert_der^)
+                        # Extensions for each cert
+                        var ext_len_cert = Int(list_cur.read_u16())
+                        if ext_len_cert > 0:
+                            _ = list_cur.read_bytes(ext_len_cert)
+
+                    print(
+                        "  Received "
+                        + String(len(cert_list))
+                        + " certificates from server"
+                    )
+                    if len(cert_list) > 0:
+                        var leaf_der = cert_list[0].copy()
+                        var parsed = parse_certificate(leaf_der)
                         self.server_pubkey = parsed.public_key.copy()
                         var trust = load_trust_store()
                         var host_bytes = string_to_bytes(self.host)
-                        if not verify_chain(cert_der, trust, host_bytes):
+                        if not verify_chain(cert_list, trust, host_bytes):
                             raise Error(
                                 "TLS handshake: certificate verification failed"
                             )
@@ -767,18 +781,44 @@ struct TLS13Client[T: TLSTransport](Movable):
                         signed.append(b)
                     signed.append(UInt8(0x00))
                     var thash = sha256_bytes(self.transcript)
-                    if sig_alg == SIG_ECDSA_SECP256R1_SHA384:
+                    if (
+                        sig_alg == SIG_ECDSA_SECP384R1_SHA384
+                        or sig_alg == SIG_RSA_PKCS1_SHA384
+                    ):
                         thash = sha384_bytes(self.transcript)
                     for b in thash:
                         signed.append(b)
                     if len(self.server_pubkey) == 0:
                         raise Error("TLS handshake: missing server public key")
                     var sig_hash = sha256_bytes(signed)
-                    if sig_alg == SIG_ECDSA_SECP256R1_SHA384:
-                        sig_hash = sha384_bytes(signed)
-                    if not verify_ecdsa_p256_hash(
-                        self.server_pubkey, sig_hash, sig
+                    if (
+                        sig_alg == SIG_ECDSA_SECP384R1_SHA384
+                        or sig_alg == SIG_RSA_PKCS1_SHA384
                     ):
+                        sig_hash = sha384_bytes(signed)
+
+                    var verified: Bool
+                    if sig_alg == SIG_RSA_PSS_RSAE_SHA256:
+                        verified = verify_rsa_pss_sha256(
+                            self.server_pubkey, signed, sig
+                        )
+                    elif (
+                        sig_alg == SIG_RSA_PKCS1_SHA256
+                        or sig_alg == SIG_RSA_PKCS1_SHA384
+                    ):
+                        verified = verify_rsa_pkcs1v15(
+                            self.server_pubkey, signed, sig
+                        )
+                    elif sig_alg == SIG_ECDSA_SECP384R1_SHA384:
+                        verified = verify_ecdsa_p384_hash(
+                            self.server_pubkey, sig_hash, sig
+                        )
+                    else:
+                        verified = verify_ecdsa_p256_hash(
+                            self.server_pubkey, sig_hash, sig
+                        )
+
+                    if not verified:
                         raise Error("TLS handshake: CertificateVerify failed")
                     for b in full:
                         self.transcript.append(b)

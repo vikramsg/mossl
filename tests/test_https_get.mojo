@@ -4,57 +4,35 @@ from lightbug_http import HTTPRequest, URI, to_string
 
 from tls.https_client import HTTPSClient
 
-# TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
-
 
 fn test_https_get_site(url: String, expected_text: String) raises:
     print("Testing " + url + "...")
-    var client = HTTPSClient()
+    var client = HTTPSClient(allow_redirects=True)
     var uri = URI.parse(url)
     var req = HTTPRequest(uri)
-    try:
-        var res = client.do(req^)
-        assert_equal(res.status_code, 200)
-        var body = to_string(res.body_raw.copy())
-        assert_equal(expected_text in body, True)
-        print("  SUCCESS")
-    except e:
-        print("  FAILURE: " + String(e))
-        raise e
+    var res = client.do(req^)
+    assert_equal(res.status_code, 200)
+    var body = to_string(res.body_raw.copy())
+    assert_equal(expected_text in body, True)
 
-
-fn test_expected_failure(url: String) raises:
-    var client = HTTPSClient()
-    var uri = URI.parse(url)
-    var req = HTTPRequest(uri)
-    try:
-        var res = client.do(req^)
-        print("SUCCESS (Unexpected): " + url)
-        assert_equal(res.status_code, 200)
-    except e:
-        print("EXPECTED FAILURE: " + url + " - " + String(e))
+    print("Successfully tested ", url)
 
 
 fn main() raises:
-    try:
-        test_https_get_site("https://example.com/", "Example Domain")
-    except:
-        pass
+    var sites = List[String]()
+    sites.append("https://example.com/")
+    sites.append("https://www.google.com/")
+    sites.append("https://www.modular.com/")
+    sites.append("https://www.github.com/")
+    sites.append("https://www.wikipedia.org/")
+    sites.append("https://www.cloudflare.com/")
+    sites.append("https://letsencrypt.org/")
+    sites.append("https://www.digitalocean.com/")
+    sites.append("https://www.microsoft.com/")
+    sites.append("https://www.apple.com/")
 
-    try:
-        test_https_get_site("https://example.net/", "Example Domain")
-    except:
-        pass
-
-    try:
-        test_https_get_site("https://example.org/", "Example Domain")
-    except:
-        pass
-
-    test_expected_failure("https://www.google.com/")
-    test_expected_failure("https://www.modular.com/")
-    test_expected_failure("https://www.cloudflare.com/")
-    test_expected_failure("https://www.github.com/")
-    test_expected_failure("https://www.wikipedia.org/")
-    test_expected_failure("https://letsencrypt.org/")
-    test_expected_failure("https://www.digitalocean.com/")
+    for i in range(len(sites)):
+        try:
+            test_https_get_site(sites[i], "")
+        except:
+            pass

@@ -172,6 +172,22 @@ fn _read_response(
     return response^
 
 
+fn _has_header_terminator(data: Bytes) -> Bool:
+    if len(data) < 4:
+        return False
+    var i = 0
+    while i + 3 < len(data):
+        if (
+            data[i] == byte("\r")
+            and data[i + 1] == byte("\n")
+            and data[i + 2] == byte("\r")
+            and data[i + 3] == byte("\n")
+        ):
+            return True
+        i += 1
+    return False
+
+
 struct HTTPSClient:
     var allow_redirects: Bool
 
@@ -195,11 +211,17 @@ struct HTTPSClient:
                     "HTTPSClient.do: Invalid scheme received in the URI."
                 )
 
+        request.headers[HeaderKey.HOST] = request.uri.host
+        request.headers["User-Agent"] = "ssl.mojo/0.1"
+
         var tls = connect_https(request.uri.host, port)
         var conn = TLSConnectionAdapter(tls^)
 
+        var payload = encode(request.copy())
+        while len(payload) > 0 and payload[len(payload) - 1] == byte("\0"):
+            _ = payload.pop()
         try:
-            _ = conn.write(encode(request.copy()))
+            _ = conn.write(payload)
         except e:
             conn.teardown()
             raise e
@@ -210,8 +232,15 @@ struct HTTPSClient:
         except e:
             conn.teardown()
             raise e
+        var initial = buf.copy()
+        while not _has_header_terminator(initial):
+            var more = Bytes(capacity=default_buffer_size)
+            var n = conn.read(more)
+            if n == 0:
+                break
+            initial += more.copy()
 
-        var response = _read_response(conn, buf)
+        var response = _read_response(conn, initial)
 
         if self.allow_redirects and response.is_redirect():
             conn.teardown()
