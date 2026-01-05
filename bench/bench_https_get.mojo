@@ -5,7 +5,6 @@ from lightbug_http import HTTPRequest, URI, to_string
 
 from tls.https_client import HTTPSClient
 
-
 @fieldwise_init
 struct Result(Copyable, Movable, ImplicitlyCopyable):
     var url: String
