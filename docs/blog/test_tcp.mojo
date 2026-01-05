@@ -16,7 +16,7 @@ fn main() raises:
     var states_val = json["states"].copy()
     var states = states_val.array().copy()
 
-    # Initialize implementation
+    # Initialize implementation (Corresponds to action "Init")
     var model = TCPModel()
 
     # Verify initial state matches trace[0]
@@ -24,45 +24,31 @@ fn main() raises:
     print("Initial state verified.")
 
     # Iterate through transitions
-    for i in range(len(states) - 1):
-        var next_json = states[i+1].copy()
-        var next_client_str = next_json["client_state"]["tag"].string()
-        var next_server_str = next_json["server_state"]["tag"].string()
+    # trace[0] is initial state.
+    # trace[1] is the result of the first transition action.
+    for i in range(1, len(states)):
+        var state_json = states[i].copy()
 
-        var transitioned = False
+        # With --mbt, the trace tells us exactly which action was taken!
+        var action = state_json["mbt::actionTaken"].string()
 
-        # Try SendSyn
-        var m1 = model
-        if m1.send_syn():
-            if String(m1.client_state) == next_client_str and String(m1.server_state) == next_server_str:
-                model = m1
-                transitioned = True
-                print("Step " + String(i) + " -> " + String(i+1) + ": SendSyn")
+        print("Step " + String(i) + ": Applying " + action)
 
-        if not transitioned:
-            var m2 = model
-            if m2.receive_syn():
-                if String(m2.client_state) == next_client_str and String(m2.server_state) == next_server_str:
-                    model = m2
-                    transitioned = True
-                    print("Step " + String(i) + " -> " + String(i+1) + ": ReceiveSyn")
+        var success = False
+        if action == "SendSyn":
+            success = model.send_syn()
+        elif action == "ReceiveSyn":
+            success = model.receive_syn()
+        elif action == "ReceiveSynAck":
+            success = model.receive_syn_ack()
+        else:
+            raise Error("Unknown or unhandled action in trace: " + action)
 
-        if not transitioned:
-            var m3 = model
-            if m3.receive_syn_ack():
-                if String(m3.client_state) == next_client_str and String(m3.server_state) == next_server_str:
-                    model = m3
-                    transitioned = True
-                    print("Step " + String(i) + " -> " + String(i+1) + ": ReceiveSynAck")
+        if not success:
+             raise Error("Action " + action + " returned False (precondition failed) at step " + String(i))
 
-        if not transitioned:
-            # Check for stutter (no state change)
-            if String(model.client_state) == next_client_str and String(model.server_state) == next_server_str:
-                print("Step " + String(i) + " -> " + String(i+1) + ": Stutter (No Change)")
-                transitioned = True
-
-        if not transitioned:
-            raise Error("No valid transition found from state " + String(i) + " to " + String(i+1))
+        # Verify state matches the trace
+        verify_state(model, state_json)
 
 fn verify_state(model: TCPModel, state_json: emberjson.Value) raises:
     var client = state_json["client_state"]["tag"].string()

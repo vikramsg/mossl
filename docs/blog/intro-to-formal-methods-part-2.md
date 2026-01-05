@@ -35,24 +35,26 @@ Now, we want a machine-readable format.
 Quint supports the **ITF** (Json Trace Format).
 
 ```bash
-quint run --max-steps=10 --out-itf=trace.itf.json tcp_simple.qnt
+quint run --mbt --max-steps=10 --out-itf=trace.itf.json tcp_simple.qnt
 ```
 
 This produces a JSON file that looks roughly like this:
 
 ```json
 {
-  "vars": ["client_state", "server_state"],
+  "vars": ["client_state", "server_state", "mbt::actionTaken"],
   "states": [
     { 
       "#meta": { "index": 0 }, 
       "client_state": { "tag": "INIT" }, 
-      "server_state": { "tag": "INIT" } 
+      "server_state": { "tag": "INIT" },
+      "mbt::actionTaken": "Init"
     },
     { 
       "#meta": { "index": 1 }, 
       "client_state": { "tag": "SYN_SENT" }, 
-      "server_state": { "tag": "INIT" } 
+      "server_state": { "tag": "INIT" },
+      "mbt::actionTaken": "SendSyn"
     },
     ...
   ]
@@ -69,17 +71,13 @@ We need a struct that holds the state and methods that correspond to the actions
 ```mojo
 # tcp.mojo
 
-@fieldwise_init
-struct State(Stringable, EqualityComparable, ImplicitlyCopyable):
-    var _value: Int # Mimic an ENUM since mojo doesn't have it natively
+struct State(EqualityComparable, ...): # Essentially an ENUM
+    var _value: Int
     alias INIT = 0
     alias SYN_SENT = 1
-    alias SYN_RCVD = 2
-    alias ESTABLISHED = 3
-    
-    # ... boiler plate for __str__, __eq__ ...
+    # ... other states ...
 
-struct TCPModel(ImplicitlyCopyable):
+struct TCPModel:
     var client_state: State
     var server_state: State
 
@@ -87,27 +85,14 @@ struct TCPModel(ImplicitlyCopyable):
         self.client_state = State(State.INIT)
         self.server_state = State(State.INIT)
 
-    # Corresponds to action SendSyn
+    # The implementation exactly mirrors the Quint spec
     fn send_syn(mut self) -> Bool:
         if self.client_state == State(State.INIT):
             self.client_state = State(State.SYN_SENT)
             return True
         return False
 
-    # Corresponds to action ReceiveSyn
-    fn receive_syn(mut self) -> Bool:
-        if self.server_state == State(State.INIT) and 
-           self.client_state == State(State.SYN_SENT):
-            self.server_state = State(State.SYN_RCVD)
-            return True
-        return False
-
-    # Corresponds to action ReceiveSynAck
-    fn receive_syn_ack(mut self) -> Bool:
-        if self.client_state == State(State.SYN_SENT):
-            self.client_state = State(State.ESTABLISHED)
-            return True
-        return False
+    # ... receive_syn, receive_syn_ack, etc.
 ```
 
 This looks simple, but notice how the logic in `send_syn` mirrors the preconditions in the Quint spec?
@@ -129,32 +114,29 @@ fn main() raises:
     var model = TCPModel()
     
     # 3. Iterate through the trace
-    for i in range(len(states) - 1):
-        var next_state = states[i+1]
-        var target_client = next_state["client_state"]["tag"].string()
-        
-        # 4. Try to find a valid transition
-        var transitioned = False
-        
-        # Try "SendSyn"
-        var m_temp = model
-        if m_temp.send_syn():
-            if String(m_temp.client_state) == target_client:
-                model = m_temp
-                transitioned = True
-                print("Transition: SendSyn")
+    # Start at index 1 because index 0 is initial state
+    for i in range(1, len(states)):
+        var state = states[i]
+        # Quint tells us exactly which action was taken!
+        var action = state["mbt::actionTaken"].string()
+        var success = False
 
-        # Try "ReceiveSyn" if needed...
-        # Try "ReceiveSynAck" if needed...
+        if action == "SendSyn":
+            success = model.send_syn()
+        elif action == "ReceiveSyn":
+            success = model.receive_syn()
+        # ... handle other actions ...
         
-        if not transitioned:
-             raise Error("Implementation could not reproduce step " + String(i))
+        if not success:
+             raise Error("Action " + action + " failed at step " + String(i))
+             
+        # Verify state matches
+        # ...
 
     print("Trace verified successfully!")
 ```
 
-The test is "dumb". It doesn't know the logic.
-It just tries to apply the methods on the model to see if it can reach the next state defined by the trace.
+The test reads the action from the trace, executes it on the model, and asserts that the resulting state matches the spec.
 If the implementation (Mojo) and the Spec (Quint) disagree, this test fails.
 
 ## Why is this powerful?
@@ -162,6 +144,21 @@ If the implementation (Mojo) and the Spec (Quint) disagree, this test fails.
 1.  **Fuzzing for Free**: Quint's random simulation generates edge cases we might forget to test manually.
 2.  **Living Documentation**: The spec *is* the documentation, and the tests ensure the code respects it.
 3.  **Refactoring Safety**: If we optimize the internals of `TCPModel`, as long as the external behavior (states) remains the same, the trace tests will pass.
+
+### Scaling Up
+
+In this simple TCP example, the logic is linear, so every random trace looks identical.
+However, for complex protocols, we typically run this process in a loop (generating 100+ traces).
+Since Quint picks random paths, this effectively fuzzes our Mojo implementation against the spec.
+
+### What about Invariants?
+
+You might ask: "Where are we checking the invariants (like `Safety`) in the Mojo test?"
+The answer is: **We don't.**
+Quint checks the invariants during the simulation phase.
+If a sequence of steps leads to a violation, Quint reports it immediately.
+The job of the Mojo test is purely to ensure **Code implementation conforms to the Spec**.
+By transitivity: if the Spec is verified safe, and the Code matches the Spec, the Code is safe.
 
 ## Conclusion
 
