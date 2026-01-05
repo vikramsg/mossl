@@ -1,64 +1,58 @@
 from collections import List
-from testing import assert_equal
+from testing import assert_true, assert_false, assert_equal
 
-from pki.bigint import BigInt
+from pki.ecdsa_p384 import verify_ecdsa_p384_hash, U384
 
-from crypto.bytes import hex_to_bytes, bytes_to_hex
-
-from pki.ecdsa_p384 import (
-    ECPoint384,
-    scalar_mul,
-    p384_gx,
-    p384_gy,
-    p384_p,
-    p384_n,
-    point_double,
-)
+from crypto.bytes import hex_to_bytes
+from crypto.sha384 import sha384_bytes
 
 
-fn test_p384_generator() raises:
-    var g = ECPoint384(p384_gx(), p384_gy(), False)
+fn get_msg() -> List[UInt8]:
+    return hex_to_bytes("48656c6c6f204d6f6a6f2042656e63686d61726b")
 
-    # 1 * G = G
-    var one = List[UInt64]()
-    one.append(1)
-    var p1 = scalar_mul(one, g)
-    assert_equal(
-        bytes_to_hex(BigInt(p1.x).to_be_bytes(48)),
-        bytes_to_hex(BigInt(p384_gx()).to_be_bytes(48)),
-    )
-    assert_equal(
-        bytes_to_hex(BigInt(p1.y).to_be_bytes(48)),
-        bytes_to_hex(BigInt(p384_gy()).to_be_bytes(48)),
+
+fn get_p384_pub() -> List[UInt8]:
+    return hex_to_bytes(
+        "04280d5497dec9fbda14637931d3a5ba60edca91ff2e9e5e9f5278acf10d371d5b2bd9e4ddc860c4c068cca7d5ca8db789129ca87576f9e0f9d172aa6061ab56ba36719c7a402c84d425da94646c105f1178326e9c323e79c87a7149bd990c4f6d"
     )
 
 
-fn test_p384_double_g() raises:
-    var g = ECPoint384(p384_gx(), p384_gy(), False)
-    var two = List[UInt64]()
-    two.append(2)
-    var p2 = scalar_mul(two, g)
-
-    # Expected 2*G for P-384
-    var expected_x = "08d999057ba3d2d969260045c55b97f089025959a6f434d651d207d19fb96e9e4fe0e86ebe0e64f85b96a9c75295df61"
-    var expected_y = "8e80f1fa5b1b3cedb7bfe8dffd6dba74b275d875bc6cc43e904e505f256ab4255ffd43e94d39e22d61501e700a940e80"
-    assert_equal(bytes_to_hex(BigInt(p2.x).to_be_bytes(48)), expected_x)
-    assert_equal(bytes_to_hex(BigInt(p2.y).to_be_bytes(48)), expected_y)
+fn get_p384_sig() -> List[UInt8]:
+    return hex_to_bytes(
+        "3065023100d5132ebda8a826ce08208f819d7afd25aba53d94e316f86253ed0f547be7070368d089211e6e75c94ae9acb69847183d0230562e2b43b16cf7cf312b2e74d6b751c4144ca91579d1452cc9ea5ebdcd84f945445d9b338b232671fcd5003e74258058"
+    )
 
 
-fn test_p384_affine_double() raises:
-    var gx_limbs = p384_gx()
+fn test_p384_constants() raises:
+    var p = U384.p384_p()
+    # Check a few limbs
+    assert_equal(p.l5, 0xFFFFFFFFFFFFFFFF)
+    assert_equal(p.l0, 0x00000000FFFFFFFF)
 
-    var g = ECPoint384(gx_limbs^, p384_gy(), False)
-    var p2 = point_double(g)
 
-    var expected_x = "08d999057ba3d2d969260045c55b97f089025959a6f434d651d207d19fb96e9e4fe0e86ebe0e64f85b96a9c75295df61"
-    var expected_y = "8e80f1fa5b1b3cedb7bfe8dffd6dba74b275d875bc6cc43e904e505f256ab4255ffd43e94d39e22d61501e700a940e80"
-    assert_equal(bytes_to_hex(BigInt(p2.x).to_be_bytes(48)), expected_x)
-    assert_equal(bytes_to_hex(BigInt(p2.y).to_be_bytes(48)), expected_y)
+fn test_verify_p384_valid() raises:
+    var pub = get_p384_pub()
+    var msg = get_msg()
+    var sig = get_p384_sig()
+    var digest = sha384_bytes(msg)
+
+    var ok = verify_ecdsa_p384_hash(pub, digest, sig)
+    assert_true(ok)
+
+
+fn test_verify_p384_invalid_msg() raises:
+    var pub = get_p384_pub()
+    var msg = hex_to_bytes(
+        "48656c6c6f204d6f6a6f2042656e63686d61726b21"
+    )  # Changed message
+    var sig = get_p384_sig()
+    var digest = sha384_bytes(msg)
+
+    var ok = verify_ecdsa_p384_hash(pub, digest, sig)
+    assert_false(ok)
 
 
 fn main() raises:
-    test_p384_generator()
-    test_p384_affine_double()
-    test_p384_double_g()
+    test_p384_constants()
+    test_verify_p384_valid()
+    test_verify_p384_invalid_msg()
