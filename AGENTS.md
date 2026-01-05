@@ -7,6 +7,17 @@ This project uses the Mojo programming language and the Pixi package manager.
 We aim to map every important operation to a Quint specification and verify each
 spec via its corresponding Mojo implementation test (trace-based or vector-based).
 
+## Coding guidelines
+
+We follow the following process for coding:
+1. Write a Quint specification for the operation.
+2. Generate a trace for the specification.
+3. Write a failing unit test for the operation.
+4. Write the Mojo implementation to pass the unit test.
+5. Run the unit test and trace test and ensure it passes.
+6. If the tests fail, fix the implementation and repeat the process.
+7. If the tests pass, move on to the next operation.
+
 ## Mojo 
 
 ### Mojo Tip: List Comprehension
