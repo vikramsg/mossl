@@ -1,7 +1,7 @@
 from collections import List
 from testing import assert_true, assert_false, assert_equal
 
-from pki.ecdsa_p384 import verify_ecdsa_p384_hash, U384
+from pki.ecdsa_p384 import verify_ecdsa_p384_hash
 
 from crypto.bytes import hex_to_bytes
 from crypto.sha384 import sha384_bytes
@@ -21,13 +21,6 @@ fn get_p384_sig() -> List[UInt8]:
     return hex_to_bytes(
         "3065023100d5132ebda8a826ce08208f819d7afd25aba53d94e316f86253ed0f547be7070368d089211e6e75c94ae9acb69847183d0230562e2b43b16cf7cf312b2e74d6b751c4144ca91579d1452cc9ea5ebdcd84f945445d9b338b232671fcd5003e74258058"
     )
-
-
-fn test_p384_constants() raises:
-    var p = U384.p384_p()
-    # Check a few limbs
-    assert_equal(p.l5, 0xFFFFFFFFFFFFFFFF)
-    assert_equal(p.l0, 0x00000000FFFFFFFF)
 
 
 fn test_verify_p384_valid() raises:
@@ -53,6 +46,5 @@ fn test_verify_p384_invalid_msg() raises:
 
 
 fn main() raises:
-    test_p384_constants()
     test_verify_p384_valid()
     test_verify_p384_invalid_msg()

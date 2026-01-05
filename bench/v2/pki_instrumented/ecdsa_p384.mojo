@@ -1,7 +1,7 @@
 from collections import List, InlineArray
 
-from pki.asn1 import DerReader, read_sequence_reader, read_integer_bytes
-from pki.ec_arithmetic import UIntLimbs, verify_generic, FieldContext
+from pki_instrumented.asn1 import DerReader, read_sequence_reader, read_integer_bytes
+from pki_instrumented.ec_arithmetic import UIntLimbs, verify_generic, FieldContext
 
 alias U384 = UIntLimbs[6]
 

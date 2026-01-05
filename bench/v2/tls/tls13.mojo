@@ -4,11 +4,11 @@ from collections import List
 from lightbug_http.address import TCPAddr
 from lightbug_http.io.bytes import Bytes
 from memory import Span
-from pki.ecdsa_p256 import verify_ecdsa_p256_hash
-from pki.ecdsa_p384 import verify_ecdsa_p384_hash
-from pki.rsa import verify_rsa_pkcs1v15, verify_rsa_pss_sha256
-from pki.trust_store import load_trust_store
-from pki.x509 import parse_certificate, verify_chain
+from pki_instrumented.ecdsa_p256 import verify_ecdsa_p256_hash
+from pki_instrumented.ecdsa_p384 import verify_ecdsa_p384_hash
+from pki_instrumented.rsa import verify_rsa_pkcs1v15, verify_rsa_pss_sha256
+from pki_instrumented.trust_store import load_trust_store
+from pki_instrumented.x509 import parse_certificate, verify_chain
 
 from crypto.aes_gcm import aes_gcm_seal, aes_gcm_open
 from crypto.bytes import concat_bytes, zeros
