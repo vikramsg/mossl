@@ -1,5 +1,8 @@
-"""Minimal TLS 1.3 client implementation (single cipher suite)."""
+"""Minimal TLS 1.3 client implementation (single cipher suite).
+Instrumented for profiling.
+"""
 from collections import List
+from time import perf_counter
 
 from lightbug_http.address import TCPAddr
 from lightbug_http.io.bytes import Bytes
@@ -18,6 +21,18 @@ from crypto_instrumented.sha256 import sha256_bytes
 from crypto_instrumented.sha384 import sha384_bytes
 from crypto_instrumented.x25519 import x25519
 from tls.transport import TLSTransport
+
+struct Timer:
+    var start: Float64
+    var name: String
+
+    fn __init__(out self, name: String):
+        self.name = name
+        self.start = perf_counter()
+
+    fn stop(self):
+        var end = perf_counter()
+        print("    [TLS-TIMER] " + self.name + ": " + String(end - self.start) + "s")
 
 alias TLS_VERSION = UInt16(0x0303)  # legacy_record_version
 alias TLS13_VERSION = UInt16(0x0304)
@@ -291,7 +306,7 @@ fn make_client_hello(
     groups_ext.append(groups_data_len[0])
     groups_ext.append(groups_data_len[1])
     for b in groups_data:
-        groups_ext.append(b)
+        groups_data.append(b)
     for b in groups_ext:
         ext.append(b)
 
@@ -557,6 +572,7 @@ struct TLS13Client[T: TLSTransport](Movable):
             write_all(self.transport, record)
 
     fn perform_handshake(mut self) raises -> Bool:
+        var t_total = Timer("perform_handshake")
         var client_random = random_bytes(32)
         var client_priv = random_bytes(32)
         var base_u = List[UInt8]()
@@ -747,11 +763,6 @@ struct TLS13Client[T: TLSTransport](Movable):
                         if ext_len_cert > 0:
                             _ = list_cur.read_bytes(ext_len_cert)
 
-                    print(
-                        "  Received "
-                        + String(len(cert_list))
-                        + " certificates from server"
-                    )
                     if len(cert_list) > 0:
                         var leaf_der = cert_list[0].copy()
                         var parsed = parse_certificate(leaf_der)
@@ -882,9 +893,11 @@ struct TLS13Client[T: TLSTransport](Movable):
             self.keys.server_app_secret, "iv", List[UInt8](), 12
         )
         self.handshake_done = True
+        t_total.stop()
         return True
 
     fn write_app_data(mut self, plaintext: List[UInt8]) raises:
+        var t = Timer("write_app_data")
         if not self.handshake_done:
             raise Error("TLS: handshake not complete")
         var key = self.keys.client_app_key.copy()
@@ -894,8 +907,10 @@ struct TLS13Client[T: TLSTransport](Movable):
         )
         self.app_seq_out += UInt64(1)
         write_all(self.transport, record)
+        t.stop()
 
     fn read_app_data(mut self) raises -> List[UInt8]:
+        var t = Timer("read_app_data")
         if not self.handshake_done:
             raise Error("TLS: handshake not complete")
         while True:
@@ -910,4 +925,5 @@ struct TLS13Client[T: TLSTransport](Movable):
             )
             self.app_seq_in += UInt64(1)
             if dec[1] == CONTENT_APPDATA:
+                t.stop()
                 return dec[0].copy()

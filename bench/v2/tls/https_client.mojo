@@ -1,4 +1,3 @@
-"""Local HTTPS client shim that uses TLSSocket without modifying lightbug_http."""
 from lightbug_http.address import TCPAddr
 from lightbug_http.connection import default_buffer_size
 from lightbug_http.cookie.response_cookie_jar import ResponseCookieJar
@@ -7,10 +6,22 @@ from lightbug_http.http import HTTPRequest, HTTPResponse, encode
 from lightbug_http.io.bytes import ByteReader, Bytes, byte
 from lightbug_http.uri import URI, Scheme
 from memory import Span
+from time import perf_counter
 
 from tls.connect_https import connect_https
 from tls.tls_socket import TLSSocket, SocketTransport
 
+struct Timer:
+    var start: Float64
+    var name: String
+
+    fn __init__(out self, name: String):
+        self.name = name
+        self.start = perf_counter()
+
+    fn stop(self):
+        var end = perf_counter()
+        print("    [HTTP-TIMER] " + self.name + ": " + String(end - self.start) + "s")
 
 struct TLSConnectionAdapter:
     var tls: TLSSocket[SocketTransport]
@@ -63,7 +74,8 @@ fn _read_until_eof(mut conn: TLSConnectionAdapter) raises -> Bytes:
 
 
 fn _read_min_bytes(
-    mut conn: TLSConnectionAdapter, min_bytes: Int
+    mut conn: TLSConnectionAdapter,
+    min_bytes: Int
 ) raises -> Bytes:
     var out = Bytes()
     if min_bytes <= 0:
@@ -86,7 +98,8 @@ fn _read_min_bytes(
 
 
 fn _read_chunked_bytes(
-    mut conn: TLSConnectionAdapter, payload: Bytes
+    mut conn: TLSConnectionAdapter,
+    payload: Bytes
 ) raises -> Bytes:
     var out = payload.copy()
     var buff = Bytes(capacity=default_buffer_size)
@@ -108,8 +121,10 @@ fn _read_chunked_bytes(
 
 
 fn _read_response(
-    mut conn: TLSConnectionAdapter, initial: Bytes
+    mut conn: TLSConnectionAdapter,
+    initial: Bytes
 ) raises -> HTTPResponse:
+    var t = Timer("_read_response")
     var reader = ByteReader(initial)
     var headers = Headers()
     var cookies = ResponseCookieJar()
@@ -142,6 +157,7 @@ fn _read_response(
         var b = reader.read_bytes().to_bytes()
         var all = _read_chunked_bytes(conn, b)
         response.read_chunks(all)
+        t.stop()
         return response^
 
     var content_length = response.headers.content_length()
@@ -155,6 +171,7 @@ fn _read_response(
             body = body[0:content_length]
         var body_reader = ByteReader(body)
         response.read_body(body_reader)
+        t.stop()
         return response^
 
     var remaining = reader.read_bytes().to_bytes()
@@ -162,6 +179,7 @@ fn _read_response(
         var remaining_len = len(remaining)
         response.body_raw = remaining^
         response.set_content_length(remaining_len)
+        t.stop()
         return response^
 
     var extra = _read_until_eof(conn)
@@ -169,6 +187,7 @@ fn _read_response(
         var extra_len = len(extra)
         response.body_raw = extra^
         response.set_content_length(extra_len)
+    t.stop()
     return response^
 
 
@@ -195,6 +214,7 @@ struct HTTPSClient:
         self.allow_redirects = allow_redirects
 
     fn do(mut self, var request: HTTPRequest) raises -> HTTPResponse:
+        var t_total = Timer("HTTPSClient.do")
         if request.uri.host == "":
             raise Error("HTTPSClient.do: Host must not be empty.")
         if not request.uri.is_https():
@@ -214,8 +234,10 @@ struct HTTPSClient:
         request.headers[HeaderKey.HOST] = request.uri.host
         request.headers["User-Agent"] = "ssl.mojo/0.1"
 
+        var t_conn = Timer("connect_https")
         var tls = connect_https(request.uri.host, port)
         var conn = TLSConnectionAdapter(tls^)
+        t_conn.stop()
 
         var payload = encode(request.copy())
         while len(payload) > 0 and payload[len(payload) - 1] == byte("\0"):
@@ -244,9 +266,11 @@ struct HTTPSClient:
 
         if self.allow_redirects and response.is_redirect():
             conn.teardown()
+            t_total.stop()
             return self._handle_redirect(request^, response^)
 
         conn.teardown()
+        t_total.stop()
         return response^
 
     fn _handle_redirect(
