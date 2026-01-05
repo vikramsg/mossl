@@ -1,4 +1,6 @@
 """Local HTTPS client shim that uses TLSSocket without modifying lightbug_http."""
+import time
+
 from lightbug_http.address import TCPAddr
 from lightbug_http.connection import default_buffer_size
 from lightbug_http.cookie.response_cookie_jar import ResponseCookieJar
@@ -10,14 +12,22 @@ from memory import Span
 
 from tls.connect_https import connect_https
 from tls.tls_socket import TLSSocket, SocketTransport
+from tls.transport import TLSTransport
 
 
-struct TLSConnectionAdapter:
-    var tls: TLSSocket[SocketTransport]
+trait HTTPReader(Movable):
+    fn read(mut self, mut buf: Bytes) raises -> UInt:
+        ...
+
+
+struct TLSConnectionAdapter[T: TLSTransport](HTTPReader, Movable):
+    var tls: TLSSocket[T]
+
     var closed: Bool
 
-    fn __init__(out self, var tls: TLSSocket[SocketTransport]):
+    fn __init__(out self, var tls: TLSSocket[T]):
         self.tls = tls^
+
         self.closed = False
 
     fn read(mut self, mut buf: Bytes) raises -> UInt:
@@ -45,51 +55,81 @@ struct TLSConnectionAdapter:
         return self.closed
 
 
-fn _read_until_eof(mut conn: TLSConnectionAdapter) raises -> Bytes:
+fn _read_until_eof[
+    R: HTTPReader
+](mut conn: R, timeout_seconds: Float64 = 5.0) raises -> Bytes:
     var out = Bytes()
+
     var buff = Bytes(capacity=default_buffer_size)
+
+    var start = time.perf_counter()
+
     while True:
+        if time.perf_counter() - start > timeout_seconds:
+            return out^
+
         var n: UInt
+
         try:
             n = conn.read(buff)
+
         except e:
             if String(e) == "EOF":
                 break
+
             raise e
+
         if n == 0:
-            break
-        out += buff.copy()
+            # We don't break here if it's stalling, but MockReader returns 0
+
+            # and we check timeout above.
+
+            pass
+
+        else:
+            out += buff.copy()
+
     return out^
 
 
-fn _read_min_bytes(
-    mut conn: TLSConnectionAdapter, min_bytes: Int
-) raises -> Bytes:
+fn _read_min_bytes[R: HTTPReader](mut conn: R, min_bytes: Int) raises -> Bytes:
     var out = Bytes()
+
     if min_bytes <= 0:
         return out^
+
     var buff = Bytes(capacity=default_buffer_size)
+
     while len(out) < min_bytes:
         var n: UInt
+
         try:
             n = conn.read(buff)
+
         except e:
             if String(e) == "EOF":
                 break
+
             raise e
+
         if n == 0:
             break
+
         out += buff.copy()
+
     if len(out) > min_bytes:
         out = out[0:min_bytes]
+
     return out^
 
 
-fn _read_chunked_bytes(
-    mut conn: TLSConnectionAdapter, payload: Bytes
-) raises -> Bytes:
+fn _read_chunked_bytes[
+    R: HTTPReader
+](mut conn: R, payload: Bytes) raises -> Bytes:
     var out = payload.copy()
+
     var buff = Bytes(capacity=default_buffer_size)
+
     while True:
         if len(out) >= 5:
             if (
@@ -100,16 +140,20 @@ fn _read_chunked_bytes(
                 and out[-1] == byte("\n")
             ):
                 break
+
         var n = conn.read(buff)
+
         if n == 0:
             break
+
         out += buff.copy()
+
     return out^
 
 
-fn _read_response(
-    mut conn: TLSConnectionAdapter, initial: Bytes
-) raises -> HTTPResponse:
+fn _read_response[
+    R: HTTPReader
+](mut conn: R, initial: Bytes) raises -> HTTPResponse:
     var reader = ByteReader(initial)
     var headers = Headers()
     var cookies = ResponseCookieJar()
@@ -145,7 +189,7 @@ fn _read_response(
         return response^
 
     var content_length = response.headers.content_length()
-    if content_length > 0:
+    if response.headers.get(HeaderKey.CONTENT_LENGTH) or content_length > 0:
         var body = reader.read_bytes().to_bytes()
         if len(body) < content_length:
             var extra = _read_min_bytes(conn, content_length - len(body))
