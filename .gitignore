@@ -10,3 +10,4 @@ node_modules
 
 # Temporary files
 .fuse_hidden*
+worktrees/
