@@ -67,11 +67,11 @@ Now let's write our "production" code.
 We need a struct that holds the state and methods that correspond to the actions in the spec.
 
 ```mojo
-// tcp.mojo
+# tcp.mojo
 
 @fieldwise_init
-struct State(Stringable, EqualityComparable, Copyable, ImplicitlyCopyable):
-    var _value: Int
+struct State(Stringable, EqualityComparable, ImplicitlyCopyable):
+    var _value: Int # Mimic an ENUM since mojo doesn't have it natively
     alias INIT = 0
     alias SYN_SENT = 1
     alias SYN_RCVD = 2
@@ -79,7 +79,7 @@ struct State(Stringable, EqualityComparable, Copyable, ImplicitlyCopyable):
     
     # ... boiler plate for __str__, __eq__ ...
 
-struct TCPModel(Copyable, ImplicitlyCopyable):
+struct TCPModel(ImplicitlyCopyable):
     var client_state: State
     var server_state: State
 
@@ -113,12 +113,12 @@ struct TCPModel(Copyable, ImplicitlyCopyable):
 This looks simple, but notice how the logic in `send_syn` mirrors the preconditions in the Quint spec?
 If we messed up the `if` condition, the state transition wouldn't happen, or would happen at the wrong time.
 
-## Step 3: The Replay Test
+### Step 3: The Replay Test
 
 This is the magic glue. We write a test that reads the JSON trace and drives the Mojo model.
 
 ```mojo
-// test_tcp.mojo (simplified)
+# test_tcp.mojo (simplified)
 
 fn main() raises:
     # 1. Load the Trace
@@ -139,7 +139,7 @@ fn main() raises:
         # Try "SendSyn"
         var m_temp = model
         if m_temp.send_syn():
-            if str(m_temp.client_state) == target_client:
+            if String(m_temp.client_state) == target_client:
                 model = m_temp
                 transitioned = True
                 print("Transition: SendSyn")
@@ -148,7 +148,7 @@ fn main() raises:
         # Try "ReceiveSynAck" if needed...
         
         if not transitioned:
-             raise Error("Implementation could not reproduce step " + str(i))
+             raise Error("Implementation could not reproduce step " + String(i))
 
     print("Trace verified successfully!")
 ```

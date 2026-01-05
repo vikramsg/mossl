@@ -1,5 +1,5 @@
 @fieldwise_init
-struct State(Stringable, EqualityComparable, Copyable, ImplicitlyCopyable):
+struct State(Stringable, EqualityComparable, ImplicitlyCopyable):
     var _value: Int
 
     alias INIT = 0
@@ -7,8 +7,7 @@ struct State(Stringable, EqualityComparable, Copyable, ImplicitlyCopyable):
     alias SYN_RCVD = 2
     alias ESTABLISHED = 3
 
-    fn __copyinit__(out self, other: State):
-        self._value = other._value
+
 
     fn __eq__(self, other: State) -> Bool:
         return self._value == other._value
@@ -23,7 +22,7 @@ struct State(Stringable, EqualityComparable, Copyable, ImplicitlyCopyable):
         if self._value == State.ESTABLISHED: return "ESTABLISHED"
         return "UNKNOWN"
 
-struct TCPModel(Copyable, ImplicitlyCopyable):
+struct TCPModel(ImplicitlyCopyable):
     var client_state: State
     var server_state: State
 
@@ -31,9 +30,7 @@ struct TCPModel(Copyable, ImplicitlyCopyable):
         self.client_state = State(State.INIT)
         self.server_state = State(State.INIT)
 
-    fn __copyinit__(out self, other: TCPModel):
-        self.client_state = other.client_state
-        self.server_state = other.server_state
+
 
     fn send_syn(mut self) -> Bool:
         if self.client_state == State(State.INIT):
