@@ -57,25 +57,28 @@ Total ==
 Inv == \A r \in Records : r.amount >= 0
 ```
 
-Yes, if you are thinking that looks like Latex but for programming, then that's exactly how I felt.
+Yes, if you are thinking that looks like Latex, that's exactly how I felt.
 Don't get me wrong, I loved Latex back when I was in Graduate School.
 There's nothing better to write equations.
 But if we could write equations (and the other stuff required to write a paper or thesis) in Python, I would take Python over Latex anyday.
+And my job does not involve equations (most of the time).
 Ultimately, if the spec is harder to read than the code, the spec is almost never going to be written.
 
 ## Enter Quint
 
-This is where [Quint](https://github.com/informalsystems/quint) comes in.
-Quint is a modern specification language developed by Informal Systems.
-It is based on the same rigorous semantics as TLA+, but with a syntax designed for software engineers.
+This is were [Quint](https://github.com/informalsystems/quint) comes in.
+It is TLA+ for humans, or software engineers (who are also humans..., for now). 
+It looks way closer to something like TypeScript than Latex.
+I think if you can read code, you can read Quint.
+And this is important because of the following.
 
-It looks like TypeScript or Python.
-If you can read code, you can read Quint.
-This is crucial. I need to be able to look at the spec and immediately understand the logic without mentally translating mathematical symbols.
+1. I think more and more software will be written by AI.
+2. That leaves, me, the human needing to somehow verify that the software is correct but I don't have the ability to read thousands of lines of code.
+3. But what if, we had a much smaller volume of text, that I could read and verify. And have the confidence that if this spec is met, then the software is correct. 
 
 ### A Concrete Example: The TCP Handshake
 
-To understand what we can do with this, let's look at something we all know: the TCP 3-way handshake.
+To understand what we can do with this, let's look at something a lot of us know and understand: the TCP 3-way handshake.
 We want to verify that a client and server can establish a connection correctly.
 
 In code, we'd worry about packets, sequence numbers, buffers, and timeouts.
