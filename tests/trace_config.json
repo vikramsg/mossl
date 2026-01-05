@@ -6,12 +6,12 @@
     {
       "name": "tls_record",
       "spec": "specs/tls_record.qnt",
-      "test": "tests/test_tls_record_trace.mojo"
+      "test": "tests/tls/test_tls_record_trace.mojo"
     },
     {
       "name": "tls_handshake",
       "spec": "specs/tls_handshake.qnt",
-      "test": "tests/test_tls_handshake_trace.mojo"
+      "test": "tests/tls/test_tls_handshake_trace.mojo"
     }
   ]
 }

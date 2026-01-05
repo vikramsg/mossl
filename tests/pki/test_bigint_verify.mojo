@@ -12,11 +12,12 @@ from pki.bigint import (
     mul_limbs,
     mod_inv,
     mod_mul,
+    mod_reduce,
+    shift_left,
 )
 
 
 fn test_large_math() raises:
-    print("Testing multi-limb math...")
     # (2^64 - 1) + 1 = 2^64
     var a = List[UInt64]()
     a.append(0xFFFFFFFFFFFFFFFF)
@@ -46,11 +47,9 @@ fn test_large_math() raises:
     assert_equal(res[0], 0)
     assert_equal(res[1], 0)
     assert_equal(res[2], 1)
-    print("multi-limb math tests passed!")
 
 
 fn test_384bit_add_sub() raises:
-    print("Testing 384-bit add/sub...")
     var p_hex = "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff"
     var p = BigInt.from_be_bytes(hex_to_bytes(p_hex))
 
@@ -61,7 +60,6 @@ fn test_384bit_add_sub() raises:
 
     var p_back = sub_limbs(p_plus_1, one)
     assert_equal(bytes_to_hex(BigInt(p_back).to_be_bytes(48)), p_hex)
-    print("384-bit add/sub tests passed!")
 
 
 fn test_mod_pow_basic() raises:
@@ -91,33 +89,26 @@ fn test_add_mod() raises:
     var res = add_mod(a, b, mod)
     assert_equal(len(res), 1)
     assert_equal(res[0], 2)
-    print("add_mod tests passed!")
 
 
 fn test_to_be_bytes() raises:
-    print("Testing to_be_bytes...")
     var limbs = List[UInt64]()
     limbs.append(0x1122334455667788)
     var b = BigInt(limbs)
     var bytes = b.to_be_bytes(8)
     assert_equal(bytes_to_hex(bytes), "1122334455667788")
-    print("to_be_bytes tests passed!")
 
 
 fn test_mod_inv() raises:
-    print("Testing mod_inv...")
     # 2^-1 mod 5 = 3
     var a = BigInt(List[UInt8](2)).limbs.copy()
     var mod = BigInt(List[UInt8](5)).limbs.copy()
     var res = mod_inv(a, mod)
     assert_equal(len(res), 1)
     assert_equal(res[0], 3)
-    print("mod_inv tests passed!")
 
 
 fn test_large_mod_inv() raises:
-    print("Testing large mod_inv...")
-
     var p = BigInt.from_be_bytes(
         hex_to_bytes(
             "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff"
@@ -140,12 +131,8 @@ fn test_large_mod_inv() raises:
         bytes_to_hex(BigInt(den_inv).to_be_bytes(48)), expected_den_inv
     )
 
-    print("large mod_inv test passed!")
-
 
 fn test_large_mod_mul() raises:
-    print("Testing large mod_mul...")
-
     var p_hex = "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff"
 
     var den_hex = "6c2fbc952c4c58debb3d317f2525b853f1e83b7a513428f9d3b462276be1718014c1639c3afd033af4863af921d41cbe"
@@ -160,26 +147,8 @@ fn test_large_mod_mul() raises:
 
     assert_equal(bytes_to_hex(BigInt(res).to_be_bytes(48)), expected_hex)
 
-    print("large mod_mul test passed!")
-
-
-from pki.bigint import (
-    BigInt,
-    mod_pow,
-    add_mod,
-    add_limbs,
-    sub_limbs,
-    mul_limbs,
-    mod_inv,
-    mod_mul,
-    mod_reduce,
-    shift_left,
-)
-
 
 fn test_shift_left() raises:
-    print("Testing shift_left...")
-
     var a = List[UInt64]()
     a.append(1)
 
@@ -197,12 +166,8 @@ fn test_shift_left() raises:
 
     assert_equal(res[1], 1)
 
-    print("shift_left tests passed!")
-
 
 fn test_mod_reduce() raises:
-    print("Testing mod_reduce...")
-
     # 10 mod 3 = 1
 
     var n = List[UInt64]()
@@ -231,12 +196,8 @@ fn test_mod_reduce() raises:
 
     assert_equal(res[0], 1)
 
-    print("mod_reduce tests passed!")
-
 
 fn test_bit_length() raises:
-    print("Testing bit_length...")
-
     var a = List[UInt64]()
     a.append(1)
 
@@ -254,8 +215,6 @@ fn test_bit_length() raises:
     a.append(0xFFFFFFFFFFFFFFFF)
 
     assert_equal(BigInt(a).bit_length(), 64)
-
-    print("bit_length tests passed!")
 
 
 fn main() raises:
@@ -282,5 +241,3 @@ fn main() raises:
     test_mod_inv()
 
     test_large_mod_inv()
-
-    print("BigInt tests passed!")

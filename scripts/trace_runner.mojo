@@ -38,7 +38,7 @@ fn main() raises:
         quint_cmd += " " + spec
 
         var test_cmd = (
-            "QUINT_TRACE_PATH=" + trace_path + " mojo run -I . " + test
+            "QUINT_TRACE_PATH=" + trace_path + " mojo run -I src " + test
         )
         var rm_cmd = "rm -f " + trace_path
 

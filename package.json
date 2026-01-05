@@ -1,5 +1,5 @@
 {
-  "name": "ssl.mojo",
+  "name": "mossl",
   "version": "1.0.0",
   "description": "The objective is to implement enough OpenSSL bindings to allow `HTTPS` connections.",
   "main": "index.js",

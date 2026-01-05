@@ -17,7 +17,6 @@ from pki.ecdsa_p384 import (
 
 
 fn test_p384_generator() raises:
-    print("Testing P-384 Generator point...")
     var g = ECPoint384(p384_gx(), p384_gy(), False)
 
     # 1 * G = G
@@ -32,11 +31,9 @@ fn test_p384_generator() raises:
         bytes_to_hex(BigInt(p1.y).to_be_bytes(48)),
         bytes_to_hex(BigInt(p384_gy()).to_be_bytes(48)),
     )
-    print("  1*G SUCCESS")
 
 
 fn test_p384_double_g() raises:
-    print("Testing P-384 2*G...")
     var g = ECPoint384(p384_gx(), p384_gy(), False)
     var two = List[UInt64]()
     two.append(2)
@@ -47,15 +44,10 @@ fn test_p384_double_g() raises:
     var expected_y = "8e80f1fa5b1b3cedb7bfe8dffd6dba74b275d875bc6cc43e904e505f256ab4255ffd43e94d39e22d61501e700a940e80"
     assert_equal(bytes_to_hex(BigInt(p2.x).to_be_bytes(48)), expected_x)
     assert_equal(bytes_to_hex(BigInt(p2.y).to_be_bytes(48)), expected_y)
-    print("  2*G SUCCESS")
 
 
 fn test_p384_affine_double() raises:
-    print("Testing P-384 affine 2*G...")
     var gx_limbs = p384_gx()
-    print("  GX limbs count: " + String(len(gx_limbs)))
-    for i in range(len(gx_limbs)):
-        print("    limb[" + String(i) + "]: " + hex(Int(gx_limbs[i])))
 
     var g = ECPoint384(gx_limbs^, p384_gy(), False)
     var p2 = point_double(g)
@@ -64,7 +56,6 @@ fn test_p384_affine_double() raises:
     var expected_y = "8e80f1fa5b1b3cedb7bfe8dffd6dba74b275d875bc6cc43e904e505f256ab4255ffd43e94d39e22d61501e700a940e80"
     assert_equal(bytes_to_hex(BigInt(p2.x).to_be_bytes(48)), expected_x)
     assert_equal(bytes_to_hex(BigInt(p2.y).to_be_bytes(48)), expected_y)
-    print("  Affine 2*G SUCCESS")
 
 
 fn main() raises:

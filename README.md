@@ -1,4 +1,4 @@
-# ssl.mojo
+# mossl
 
 ## Goal
 Implement a **pure Mojo** TLS 1.3 client stack sufficient to perform HTTPS GETs via `lightbug_http`.
@@ -9,7 +9,10 @@ Implement a **pure Mojo** TLS 1.3 client stack sufficient to perform HTTPS GETs 
 
 ## Layout
 ```
-crypto/          Stage 1 crypto primitives (pure Mojo)
+src/
+  crypto/        Stage 1 crypto primitives (pure Mojo)
+  pki/           PKI implementation
+  tls/           TLS implementation
 docs/            Roadmap and specs
 specs/           Quint specs
 tests/           Mojo tests (test_*.mojo)
@@ -67,7 +70,7 @@ Quint traces plus their corresponding Mojo implementation tests.
 
 - Config: `tests/trace_config.json`
 - Run: `pixi run test-trace`
-- Override config: `mojo run -I . scripts/trace_runner.mojo path/to/config.json`
+- Override config: `mojo run -I src scripts/trace_runner.mojo path/to/config.json`
 
 ## Testing Note (Mojo 0.25.6)
 Mojo 0.25.6 does **not** include the `TestSuite` test runner, so tests run via

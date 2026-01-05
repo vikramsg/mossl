@@ -7,6 +7,17 @@ This project uses the Mojo programming language and the Pixi package manager.
 We aim to map every important operation to a Quint specification and verify each
 spec via its corresponding Mojo implementation test (trace-based or vector-based).
 
+## Coding guidelines
+
+We follow the following process for coding:
+1. Write a Quint specification for the operation.
+2. Generate a trace for the specification.
+3. Write a failing unit test for the operation.
+4. Write the Mojo implementation to pass the unit test.
+5. Run the unit test and trace test and ensure it passes.
+6. If the tests fail, fix the implementation and repeat the process.
+7. If the tests pass, move on to the next operation.
+
 ## Mojo 
 
 ### Mojo Tip: List Comprehension
@@ -27,6 +38,44 @@ Make sure to look at mojo documentation for more bit operations.
 
 ### Mojo Tip: Prefer @fieldwise_init When Appropriate
 When a struct’s fields can be initialized directly from constructor arguments (no custom logic or defaults), prefer `@fieldwise_init` to reduce boilerplate in `__init__`.
+
+### Mojo Tip: Standard Library
+
+Prefer using the standard library modules instead of writing custom code.
+
+- **algorithm**: High performance data operations: vectorization, parallelization, reduction, memory.
+- **base64**: Binary data encoding: base64 and base16 encode/decode functions.
+- **benchmark**: Performance benchmarking: statistical analysis and detailed reports.
+- **bit**: Bitwise operations: manipulation, counting, rotation, and power-of-two utilities.
+- **builtin**: Language foundation: built-in types, traits, and fundamental operations.
+- **collections**: Core data structures: List, Dict, Set, Optional, plus specialized collections.
+- **compile**: Runtime function compilation and introspection: assembly, IR, linkage, metadata.
+- **complex**: Complex numbers: SIMD types, scalar types, and operations.
+- **documentation**: Documentation built-ins: decorators and utilities for doc generation.
+- **gpu**: GPU programming primitives: thread blocks, async memory, barriers, and sync.
+- **hashlib**: Cryptographic and non-cryptographic hashing with customizable algorithms.
+- **io**: Core I/O operations: console input/output, file handling, writing traits.
+- **iter**: Iteration traits and utilities: Iterable, Iterator, enumerate, zip, map.
+- **itertools**: Iterator tools: count, product, repeat for lazy sequence generation.
+- **logger**: Logging with configurable severity levels.
+- **math**: Math functions and constants: trig, exponential, logarithmic, and special functions.
+- **memory**: Low-level memory management: pointers, allocations, address spaces.
+- **os**: OS interface layer: environment, filesystem, process control.
+- **pathlib**: Filesystem path manipulation and navigation.
+- **prelude**: Standard library prelude: fundamental types, traits, and operations auto-imported.
+- **pwd**: Password DB Lookups. User account information.
+- **python**: Python interoperability: import modules, call functions, type conversion.
+- **random**: Pseudorandom number generation with uniform and normal distributions.
+- **runtime**: Runtime services: async execution and program tracing.
+- **stat**: File type constants and detection from stat system calls.
+- **subprocess**: Execute external processes and commands.
+- **sys**: System runtime: I/O, hardware info, FFI, intrinsics, compile-time utils.
+- **tempfile**: Manage temporary files and directories: create, locate, and cleanup.
+- **testing**: Unit testing: Assertions (equal, true, raises) and test suites.
+- **time**: Timing operations: monotonic clocks, performance counters, sleep, time_function.
+- **utils**
+
+
 
 ## Pixi
 

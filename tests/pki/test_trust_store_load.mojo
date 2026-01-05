@@ -21,7 +21,7 @@ fn test_system_trust_store() raises:
     # On most linux systems this should load something
     # If it's a very stripped down environment it might be empty,
     # but in devcontainer it should have certs.
-    print("Loaded", len(trust.roots), "system certificates")
+    # print("Loaded", len(trust.roots), "system certificates")
     assert_true(len(trust.roots) > 0)
 
 
