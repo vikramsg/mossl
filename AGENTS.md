@@ -30,6 +30,8 @@ When a struct’s fields can be initialized directly from constructor arguments 
 
 ### Mojo Tip: Standard Library
 
+Prefer using the standard library modules instead of writing custom code.
+
 - **algorithm**: High performance data operations: vectorization, parallelization, reduction, memory.
 - **base64**: Binary data encoding: base64 and base16 encode/decode functions.
 - **benchmark**: Performance benchmarking: statistical analysis and detailed reports.

@@ -12,7 +12,7 @@ test-specs = "npx quint test specs/crypto_sha256.qnt && npx quint test specs/cry
 test-crypto = "mojo run -I src tests/crypto/test_sha256.mojo && mojo run -I src tests/crypto/test_hmac.mojo && mojo run -I src tests/crypto/test_hkdf.mojo && mojo run -I src tests/crypto/test_x25519.mojo && mojo run -I src tests/crypto/test_aes_gcm.mojo && mojo run -I src tests/crypto/test_base64.mojo"
 test-pki = "mojo run -I src tests/pki/test_pki.mojo && mojo run -I src tests/pki/test_pem.mojo && mojo run -I src tests/pki/test_rsa.mojo && mojo run -I src tests/pki/test_rsa_verify.mojo && mojo run -I src tests/pki/test_trust_store_load.mojo && mojo run -I src tests/pki/test_x509_verify.mojo && mojo run -I src tests/pki/test_bigint_verify.mojo && mojo run -I src tests/pki/test_p384_math.mojo"
 test-tls = "mojo run -I src tests/tls/test_record_layer.mojo && mojo run -I src tests/tls/test_handshake.mojo && mojo run -I src tests/tls/test_tls_socket.mojo && mojo run -I src tests/tls/test_tls13_rfc8448_kdf.mojo && mojo run -I src tests/tls/test_tls13_rfc8448_record.mojo && mojo run -I src tests/tls/test_tls_client_hello.mojo"
-test-https = "mojo run -I src tests/tls/test_https_get.mojo"
+test-https = "mojo run -I src tests/integration/test_https_get.mojo"
 test-trace = "mojo run -I src scripts/trace_runner.mojo tests/trace_config.json"
 test-all = { depends-on = ["test-specs", "test-crypto", "test-pki", "test-tls", "test-https", "test-trace"] }
 
