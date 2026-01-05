@@ -5,7 +5,12 @@ Implement a **pure Mojo** TLS 1.3 client stack sufficient to perform HTTPS GETs 
 
 ## Status
 - TLS 1.3 MVP client implemented with **real HTTPS GET** support.
-- Current limits: single cipher suite (`TLS_AES_128_GCM_SHA256`), X25519, ECDSA P‑256 (SHA‑256/SHA‑384), no ALPN/session resumption.
+- Supported features:
+    - Cipher suite: `TLS_AES_128_GCM_SHA256`.
+    - Key exchange: `X25519`.
+    - Signature algorithms: `ECDSA P-256` (SHA-256), `ECDSA P-384` (SHA-384), `RSA-PSS` (SHA-256), `RSA-PKCS1` (SHA-256/SHA-384).
+    - Certificate verification: Full chain validation using system trust store (or provided CA bundle).
+- Current limits: No ALPN, no session resumption, single cipher suite.
 
 ## Layout
 ```
@@ -42,6 +47,9 @@ tls/tls13.mojo          (TLS 1.3 client: records, key schedule, cert verify)
 
 ## Commands
 ```
+# Run HTTPS GET usage script (multiple sites)
+pixi run mojo -I src scripts/https_get.mojo
+
 # Run Stage 1 Quint spec tests
 pixi run test-specs
 
