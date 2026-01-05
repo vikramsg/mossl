@@ -1,12 +1,13 @@
-from time import perf_counter
 from collections import List
+from time import perf_counter
+
+from pki.bigint import BigInt, mod_pow
+from pki.ecdsa_p384 import verify_ecdsa_p384_hash
+from pki.rsa import verify_rsa_pkcs1v15
 from python import Python
 
-from pki.rsa import verify_rsa_pkcs1v15
-from pki.ecdsa_p384 import verify_ecdsa_p384_hash
-from crypto.sha384 import sha384_bytes
-from pki.bigint import BigInt, mod_pow
 from crypto.bytes import hex_to_bytes
+from crypto.sha384 import sha384_bytes
 
 # --- Constants ---
 

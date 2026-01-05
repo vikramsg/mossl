@@ -140,23 +140,87 @@ fn main():
 
 ## 6. Memory Management: `UnsafePointer`
 
-Mojo v25.7 introduced a new `UnsafePointer` type to replace the legacy version, improving safety by preventing implicit mutability casts.
+Mojo provides `UnsafePointer` for low-level memory operations, FFI, and building high-performance data structures. While powerful, **usage should be minimized** in favor of safer abstractions like `InlineArray` or `List` whenever possible.
+
+### Correct Usage Patterns
+
+`UnsafePointer` requires manual management of both memory allocation and the lifecycle of the objects stored within that memory.
 
 ```mojo
 from memory import UnsafePointer
 
-fn pointer_example():
-    var x: Int = 42
-    # New UnsafePointer usage
-    var p = UnsafePointer[Int].address_of(x)
-    print(p.load())
+fn advanced_pointer_usage():
+    # 1. Allocation: Allocates heap memory for 10 Integers
+    var ptr = UnsafePointer[Int].alloc(10)
+    
+    # 2. Initialization: MUST initialize memory before loading
+    # For complex types, use init_pointee_copy or init_pointee_move
+    for i in range(10):
+        (ptr + i).init_pointee_copy(i * i)
+    
+    # 3. Loading and Storing: Using subscripts or SIMD
+    # Subscript access is generally preferred for clarity
+    ptr[0] = 42
+    print(ptr[0])
+    
+    # 4. Lifecycle Management: Destroying elements
+    for i in range(10):
+        (ptr + i).destroy_pointee()
+    
+    # 5. Deallocation: Freeing the heap memory
+    ptr.free()
+
+fn simd_pointer_usage(data: UnsafePointer[Float32]):
+    # Use load/store with width for vectorized operations on DTypes
+    var vec = data.load[width=8](0) 
+    data.store(0, vec * 2.0)
 ```
+
+### Key Considerations
+- **Manual Safety**: You are responsible for bounds checking, null checks, and ensuring memory is initialized before use.
+- **Lifecycle Methods**: Use `init_pointee_copy`, `init_pointee_move`, and `destroy_pointee` to correctly handle types with non-trivial constructors/destructors.
+- **Minimize Usage**: `UnsafePointer` bypasses Mojo's ownership and safety model. Improper use leads to memory leaks, use-after-free, and segmentation faults. Only use it in hot paths where safe alternatives are insufficient.
 
 ## 7. Optimization Decorators
 
 - **`@always_inline`**: Removes function call overhead by inlining the code.
 - **`@parameter`**: Marks a closure to be captured at compile-time (essential for `vectorize`).
 - **`@value`**: Generates boilerplate for move/copy constructors.
+
+## 8. High-Performance Bit Manipulation: `bit` Module
+
+Mojo provides the `bit` module for hardware-accelerated bitwise operations, which are essential for cryptography, compression, and low-level data processing. These functions typically map directly to specialized CPU instructions (like `LZCNT`, `POPCNT`, `ROR`/`ROL`) for maximum efficiency.
+
+### Key Bitwise Functions
+
+```mojo
+from bit import count_leading_zeros, pop_count, rotate_bits_left
+
+fn bit_tricks():
+    let val: UInt64 = 0x0000FFFF00000000
+    
+    # Count leading zeros (useful for bigint normalization)
+    let leading = count_leading_zeros(val) # Returns 16
+    
+    # Population count (number of set bits)
+    let bits = pop_count(val) # Returns 16
+    
+    # Bit rotation (wrap-around shift)
+    let rotated = rotate_bits_left(val, 8)
+```
+
+### Performance Benefits
+- **Hardware Acceleration**: Functions like `count_leading_zeros` use dedicated CPU instructions, outperforming manual loop-based implementations.
+- **SIMD Support**: Most `bit` functions are vectorized and can operate on `SIMD` types directly, enabling parallel bit manipulation across multiple data points.
+- **Constant Time**: Many bitwise operations are inherently constant-time, which is critical for preventing side-channel attacks in cryptographic code.
+
+```mojo
+from bit import bit_reverse
+
+fn vectorized_bit_reverse(data: SIMD[DType.uint32, 8]) -> SIMD[DType.uint32, 8]:
+    # Reverses bits for all 8 elements in parallel
+    return bit_reverse(data)
+```
 
 ---
 *Source: Verified against Mojo v25.7 release notes and official documentation.*

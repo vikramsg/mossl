@@ -1,12 +1,14 @@
 from collections import List, InlineArray
+from testing import assert_true, assert_equal
 from time import perf_counter
-from memory import UnsafePointer, memcpy
+
 from bit import count_leading_zeros
+from memory import UnsafePointer, memcpy
+from pki.asn1 import DerReader, read_sequence_reader, read_integer_bytes
+from pki.bigint import BigInt, mod_mul as bi_mod_mul, mod_inv as bi_mod_inv
+
 from crypto.bytes import hex_to_bytes
 from crypto.sha384 import sha384_bytes
-from pki.bigint import BigInt, mod_mul as bi_mod_mul, mod_inv as bi_mod_inv
-from pki.asn1 import DerReader, read_sequence_reader, read_integer_bytes
-from testing import assert_true, assert_equal
 
 # V2 Optimization: 
 # 1. Remove "False SIMD" (scalar loops over SIMD types)

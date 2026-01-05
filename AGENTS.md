@@ -18,6 +18,8 @@ We follow the following process for coding:
 6. If the tests fail, fix the implementation and repeat the process.
 7. If the tests pass, move on to the next operation.
 
+**Important:** Only stop after successfull doing `make test-all` and `make format`. 
+
 ## Running code
 
 1. When running code, use `pixi run` to run the code.
