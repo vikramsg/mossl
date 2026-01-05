@@ -47,8 +47,10 @@ fn test_chain_and_hostname() raises:
     assert_equal(hostname_matches(cert, hostname), True)
     var trust = TrustStore()
     trust.add_der(cert_der)
-    assert_equal(verify_chain(cert_der, trust, hostname), True)
-    assert_equal(verify_chain(cert_der, trust, bad_hostname), False)
+    var chain = List[List[UInt8]]()
+    chain.append(cert_der^)
+    assert_equal(verify_chain(chain, trust, hostname), True)
+    assert_equal(verify_chain(chain, trust, bad_hostname), False)
 
 
 fn main() raises:

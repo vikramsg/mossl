@@ -49,6 +49,7 @@ fn to_string(b: List[UInt8]) -> String:
         s += chr(Int(b[i]))
     return s
 
+
 fn to_hex(b: List[UInt8]) -> String:
     var s = String("")
     var chars = String("0123456789abcdef")
@@ -57,6 +58,7 @@ fn to_hex(b: List[UInt8]) -> String:
         s += chars[v >> 4]
         s += chars[v & 0x0F]
     return s
+
 
 fn oid_equal(a: List[UInt8], b: List[UInt8]) -> Bool:
     if len(a) != len(b):
@@ -261,6 +263,12 @@ struct TrustStore(Movable):
     fn __init__(out self):
         self.roots = List[List[UInt8]]()
 
+    fn copy(self) -> TrustStore:
+        var out = TrustStore()
+        for i in range(len(self.roots)):
+            out.add_der(self.roots[i].copy())
+        return out^
+
     fn add_der(mut self, der: List[UInt8]):
         self.roots.append(der.copy())
 
@@ -299,23 +307,45 @@ fn load_system_trust_store() -> TrustStore:
 
 fn verify_certificate_signature(cert: ParsedCertificate) raises -> Bool:
     var oid_ecdsa_sha256 = List[UInt8]()
-    oid_ecdsa_sha256.append(UInt8(0x2A)); oid_ecdsa_sha256.append(UInt8(0x86)); oid_ecdsa_sha256.append(UInt8(0x48))
-    oid_ecdsa_sha256.append(UInt8(0xCE)); oid_ecdsa_sha256.append(UInt8(0x3D)); oid_ecdsa_sha256.append(UInt8(0x04))
-    oid_ecdsa_sha256.append(UInt8(0x03)); oid_ecdsa_sha256.append(UInt8(0x02))
+    oid_ecdsa_sha256.append(UInt8(0x2A))
+    oid_ecdsa_sha256.append(UInt8(0x86))
+    oid_ecdsa_sha256.append(UInt8(0x48))
+    oid_ecdsa_sha256.append(UInt8(0xCE))
+    oid_ecdsa_sha256.append(UInt8(0x3D))
+    oid_ecdsa_sha256.append(UInt8(0x04))
+    oid_ecdsa_sha256.append(UInt8(0x03))
+    oid_ecdsa_sha256.append(UInt8(0x02))
     var oid_ecdsa_sha384 = List[UInt8]()
-    oid_ecdsa_sha384.append(UInt8(0x2A)); oid_ecdsa_sha384.append(UInt8(0x86)); oid_ecdsa_sha384.append(UInt8(0x48))
-    oid_ecdsa_sha384.append(UInt8(0xCE)); oid_ecdsa_sha384.append(UInt8(0x3D)); oid_ecdsa_sha384.append(UInt8(0x04))
-    oid_ecdsa_sha384.append(UInt8(0x03)); oid_ecdsa_sha384.append(UInt8(0x03))
+    oid_ecdsa_sha384.append(UInt8(0x2A))
+    oid_ecdsa_sha384.append(UInt8(0x86))
+    oid_ecdsa_sha384.append(UInt8(0x48))
+    oid_ecdsa_sha384.append(UInt8(0xCE))
+    oid_ecdsa_sha384.append(UInt8(0x3D))
+    oid_ecdsa_sha384.append(UInt8(0x04))
+    oid_ecdsa_sha384.append(UInt8(0x03))
+    oid_ecdsa_sha384.append(UInt8(0x03))
 
     var oid_rsa_sha256 = List[UInt8]()
-    oid_rsa_sha256.append(UInt8(0x2A)); oid_rsa_sha256.append(UInt8(0x86)); oid_rsa_sha256.append(UInt8(0x48))
-    oid_rsa_sha256.append(UInt8(0x86)); oid_rsa_sha256.append(UInt8(0xF7)); oid_rsa_sha256.append(UInt8(0x0D))
-    oid_rsa_sha256.append(UInt8(0x01)); oid_rsa_sha256.append(UInt8(0x01)); oid_rsa_sha256.append(UInt8(0x0B))
+    oid_rsa_sha256.append(UInt8(0x2A))
+    oid_rsa_sha256.append(UInt8(0x86))
+    oid_rsa_sha256.append(UInt8(0x48))
+    oid_rsa_sha256.append(UInt8(0x86))
+    oid_rsa_sha256.append(UInt8(0xF7))
+    oid_rsa_sha256.append(UInt8(0x0D))
+    oid_rsa_sha256.append(UInt8(0x01))
+    oid_rsa_sha256.append(UInt8(0x01))
+    oid_rsa_sha256.append(UInt8(0x0B))
 
     var oid_rsa_sha384 = List[UInt8]()
-    oid_rsa_sha384.append(UInt8(0x2A)); oid_rsa_sha384.append(UInt8(0x86)); oid_rsa_sha384.append(UInt8(0x48))
-    oid_rsa_sha384.append(UInt8(0x86)); oid_rsa_sha384.append(UInt8(0xF7)); oid_rsa_sha384.append(UInt8(0x0D))
-    oid_rsa_sha384.append(UInt8(0x01)); oid_rsa_sha384.append(UInt8(0x01)); oid_rsa_sha384.append(UInt8(0x0C))
+    oid_rsa_sha384.append(UInt8(0x2A))
+    oid_rsa_sha384.append(UInt8(0x86))
+    oid_rsa_sha384.append(UInt8(0x48))
+    oid_rsa_sha384.append(UInt8(0x86))
+    oid_rsa_sha384.append(UInt8(0xF7))
+    oid_rsa_sha384.append(UInt8(0x0D))
+    oid_rsa_sha384.append(UInt8(0x01))
+    oid_rsa_sha384.append(UInt8(0x01))
+    oid_rsa_sha384.append(UInt8(0x0C))
 
     if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
         return verify_ecdsa_p256(cert.public_key, cert.tbs, cert.signature)
@@ -334,33 +364,56 @@ fn verify_signature_with_issuer(
     cert: ParsedCertificate, issuer_pubkey: List[UInt8]
 ) raises -> Bool:
     var oid_ecdsa_sha256 = List[UInt8]()
-    oid_ecdsa_sha256.append(UInt8(0x2A)); oid_ecdsa_sha256.append(UInt8(0x86)); oid_ecdsa_sha256.append(UInt8(0x48))
-    oid_ecdsa_sha256.append(UInt8(0xCE)); oid_ecdsa_sha256.append(UInt8(0x3D)); oid_ecdsa_sha256.append(UInt8(0x04))
-    oid_ecdsa_sha256.append(UInt8(0x03)); oid_ecdsa_sha256.append(UInt8(0x02))
+    oid_ecdsa_sha256.append(UInt8(0x2A))
+    oid_ecdsa_sha256.append(UInt8(0x86))
+    oid_ecdsa_sha256.append(UInt8(0x48))
+    oid_ecdsa_sha256.append(UInt8(0xCE))
+    oid_ecdsa_sha256.append(UInt8(0x3D))
+    oid_ecdsa_sha256.append(UInt8(0x04))
+    oid_ecdsa_sha256.append(UInt8(0x03))
+    oid_ecdsa_sha256.append(UInt8(0x02))
     var oid_ecdsa_sha384 = List[UInt8]()
-    oid_ecdsa_sha384.append(UInt8(0x2A)); oid_ecdsa_sha384.append(UInt8(0x86)); oid_ecdsa_sha384.append(UInt8(0x48))
-    oid_ecdsa_sha384.append(UInt8(0xCE)); oid_ecdsa_sha384.append(UInt8(0x3D)); oid_ecdsa_sha384.append(UInt8(0x04))
-    oid_ecdsa_sha384.append(UInt8(0x03)); oid_ecdsa_sha384.append(UInt8(0x03))
+    oid_ecdsa_sha384.append(UInt8(0x2A))
+    oid_ecdsa_sha384.append(UInt8(0x86))
+    oid_ecdsa_sha384.append(UInt8(0x48))
+    oid_ecdsa_sha384.append(UInt8(0xCE))
+    oid_ecdsa_sha384.append(UInt8(0x3D))
+    oid_ecdsa_sha384.append(UInt8(0x04))
+    oid_ecdsa_sha384.append(UInt8(0x03))
+    oid_ecdsa_sha384.append(UInt8(0x03))
 
     var oid_rsa_sha256 = List[UInt8]()
-    oid_rsa_sha256.append(UInt8(0x2A)); oid_rsa_sha256.append(UInt8(0x86)); oid_rsa_sha256.append(UInt8(0x48))
-    oid_rsa_sha256.append(UInt8(0x86)); oid_rsa_sha256.append(UInt8(0xF7)); oid_rsa_sha256.append(UInt8(0x0D))
-    oid_rsa_sha256.append(UInt8(0x01)); oid_rsa_sha256.append(UInt8(0x01)); oid_rsa_sha256.append(UInt8(0x0B))
+    oid_rsa_sha256.append(UInt8(0x2A))
+    oid_rsa_sha256.append(UInt8(0x86))
+    oid_rsa_sha256.append(UInt8(0x48))
+    oid_rsa_sha256.append(UInt8(0x86))
+    oid_rsa_sha256.append(UInt8(0xF7))
+    oid_rsa_sha256.append(UInt8(0x0D))
+    oid_rsa_sha256.append(UInt8(0x01))
+    oid_rsa_sha256.append(UInt8(0x01))
+    oid_rsa_sha256.append(UInt8(0x0B))
 
     var oid_rsa_sha384 = List[UInt8]()
-    oid_rsa_sha384.append(UInt8(0x2A)); oid_rsa_sha384.append(UInt8(0x86)); oid_rsa_sha384.append(UInt8(0x48))
-    oid_rsa_sha384.append(UInt8(0x86)); oid_rsa_sha384.append(UInt8(0xF7)); oid_rsa_sha384.append(UInt8(0x0D))
-    oid_rsa_sha384.append(UInt8(0x01)); oid_rsa_sha384.append(UInt8(0x01)); oid_rsa_sha384.append(UInt8(0x0C))
+    oid_rsa_sha384.append(UInt8(0x2A))
+    oid_rsa_sha384.append(UInt8(0x86))
+    oid_rsa_sha384.append(UInt8(0x48))
+    oid_rsa_sha384.append(UInt8(0x86))
+    oid_rsa_sha384.append(UInt8(0xF7))
+    oid_rsa_sha384.append(UInt8(0x0D))
+    oid_rsa_sha384.append(UInt8(0x01))
+    oid_rsa_sha384.append(UInt8(0x01))
+    oid_rsa_sha384.append(UInt8(0x0C))
 
     if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
         return verify_ecdsa_p256(issuer_pubkey, cert.tbs, cert.signature)
     if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
         var h = sha384_bytes(cert.tbs)
-        var ok = verify_ecdsa_p384_hash(
-            issuer_pubkey, h, cert.signature
-        )
+        var ok = verify_ecdsa_p384_hash(issuer_pubkey, h, cert.signature)
         if not ok:
-            print("  ECDSA-SHA384 verification failed for " + to_string(cert.subject_cn))
+            print(
+                "  ECDSA-SHA384 verification failed for "
+                + to_string(cert.subject_cn)
+            )
             print("  Issuer key len: " + String(len(issuer_pubkey)))
             print("  Signature len: " + String(len(cert.signature)))
         return ok
@@ -382,10 +435,10 @@ fn verify_chain(
         return False
     if not hostname_matches(leaf, hostname):
         return False
-    
+
     var current_cert = leaf.copy()
     var cert_idx = 0
-    
+
     while True:
         # Check if current_cert is signed by any root
         for i in range(len(trust.roots)):
@@ -395,12 +448,12 @@ fn verify_chain(
             if bytes_equal(current_cert.issuer_cn, root.subject_cn):
                 if verify_signature_with_issuer(current_cert, root.public_key):
                     return True
-        
+
         # If not, check if signed by next intermediate in the provided list
         cert_idx += 1
         if cert_idx >= len(certs):
             break
-            
+
         var next_cert = parse_certificate(certs[cert_idx])
         if bytes_equal(current_cert.issuer_cn, next_cert.subject_cn):
             if verify_signature_with_issuer(current_cert, next_cert.public_key):
@@ -409,5 +462,5 @@ fn verify_chain(
                 return False
         else:
             return False
-            
+
     return False

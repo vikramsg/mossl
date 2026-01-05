@@ -243,7 +243,9 @@ fn scalar_mul(k: List[UInt64], p: ECPoint) -> ECPoint:
     return jacobian_to_affine(result)
 
 
-fn parse_ecdsa_signature(sig_der: List[UInt8]) raises -> (List[UInt64], List[UInt64]):
+fn parse_ecdsa_signature(
+    sig_der: List[UInt8],
+) raises -> (List[UInt64], List[UInt64]):
     var reader = DerReader(sig_der)
     var seq = read_sequence_reader(reader)
     var r_bytes = read_integer_bytes(seq)
