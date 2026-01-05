@@ -222,5 +222,56 @@ fn vectorized_bit_reverse(data: SIMD[DType.uint32, 8]) -> SIMD[DType.uint32, 8]:
     return bit_reverse(data)
 ```
 
+## 9. Benchmarking: `benchmark` Module
+
+Mojo's `benchmark` module provides a robust framework for performance measurement, offering statistical analysis (mean, min, max) and detailed reports.
+
+### Basic Usage
+The `run` function executes a given function multiple times to collect performance data. Use `keep()` to prevent the compiler from optimizing away code that has no side effects but is essential for the benchmark.
+
+```mojo
+from benchmark import run, Unit, keep
+
+fn my_target_function():
+    var x: Int = 0
+    for i in range(100):
+        x += i
+    keep(x) # Ensure x is not optimized away
+
+fn main() raises:
+    # Runs the benchmark and returns a Report object
+    var report = run[my_target_function]()
+    
+    # Print the report in different units (s, ms, us, ns)
+    report.print(Unit.ms)
+    
+    # Access specific metrics
+    print("Mean time:", report.mean(Unit.ns), "ns")
+```
+
+### Benchmarking with Arguments
+If your target function requires arguments, wrap it in a `@parameter` closure.
+
+```mojo
+from benchmark import run
+
+fn work_with_args(size: Int):
+    # ... expensive work ...
+    pass
+
+fn main() raises:
+    @parameter
+    fn wrapper():
+        work_with_args(1024)
+    
+    var report = run[wrapper]()
+    report.print()
+```
+
+### Key Features
+- **Warmup**: `run` automatically performs warmup iterations to stabilize the CPU and cache state.
+- **Statistical Analysis**: Reports include mean, total duration, fastest, and slowest iterations.
+- **Optimization Guard**: `keep()` is critical for ensuring that code whose results are unused (typical in benchmarks) is actually executed by the compiler.
+
 ---
 *Source: Verified against Mojo v25.7 release notes and official documentation.*
