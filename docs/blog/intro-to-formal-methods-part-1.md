@@ -41,10 +41,13 @@ We need a way to describe *intent* that is as rigorous as code, but abstract eno
 
 ## The Scary Part: TLA+
 
-This isn't a new problem. Decades ago, Leslie Lamport (the creator of LaTeX and distributed systems legend) gave us **TLA+** (Temporal Logic of Actions).
-It is the gold standard for formal verification. It is used by AWS to design DynamoDB and S3. It is used by Azure. It works.
+This isn't a new problem. 
+Decades ago, Leslie Lamport (the creator of LaTeX and distributed systems legend) gave us **TLA+** (Temporal Logic of Actions).
+It is the gold standard for formal verification. 
+It is used by AWS to design DynamoDB and S3. It is used by Azure. It works.
 
-But have you ever looked at TLA+?
+But then I looked at TLA+. 
+And this is what it looks like.
 
 ```tla
 Total ==
@@ -54,10 +57,11 @@ Total ==
 Inv == \A r \in Records : r.amount >= 0
 ```
 
-It is grounded in set theory and temporal logic. It uses symbols like `/\`, `\/`, `[]`, and `<>`.
-For a software engineer, this is a friction point.
-If I have to learn a completely new paradigm that looks like advanced calculus just to write a spec, I'm probably not going to do it. And more importantly, I'm not going to maintain it.
-If the spec is harder to read than the code, the spec dies.
+Yes, if you are thinking that looks like Latex but for programming, then that's exactly how I felt.
+Don't get me wrong, I loved Latex back when I was in Graduate School.
+There's nothing better to write equations.
+But if we could write equations (and the other stuff required to write a paper or thesis) in Python, I would take Python over Latex anyday.
+Ultimately, if the spec is harder to read than the code, the spec is almost never going to be written.
 
 ## Enter Quint
 
