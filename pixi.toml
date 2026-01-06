@@ -24,5 +24,10 @@ emberjson = ">=0.2.0"
 [feature.dev.pypi-dependencies]
 cryptography = "*"
 
+# To use it, do `pixi run -e python-tcp ...`
+[feature.python-tcp.pypi-dependencies]
+pydantic = "*"
+
 [environments]
 default = ["dev"]
+python-tcp = ["python-tcp"]
