@@ -93,3 +93,45 @@ fn zeros(count: Int) -> List[UInt8]:
         out.append(UInt8(0))
         i += 1
     return out^
+
+
+fn constant_time_compare(a: List[UInt8], b: List[UInt8]) -> Bool:
+    """Compare two byte lists in constant time.
+    Returns True if they are equal, False otherwise.
+    Both lists must have the same length.
+    """
+    if len(a) != len(b):
+        return False
+    var result = UInt8(0)
+    for i in range(len(a)):
+        result |= a[i] ^ b[i]
+    return result == 0
+
+
+fn ct_select(mask: UInt8, a: UInt8, b: UInt8) -> UInt8:
+    """Constant-time selection.
+    If mask is 0xFF, returns a.
+    If mask is 0x00, returns b.
+    """
+    return (mask & a) | (~mask & b)
+
+
+fn ct_swap(mut a: List[UInt8], mut b: List[UInt8], choice: UInt8):
+    """Constant-time conditional swap.
+    If choice is 1, swaps a and b.
+    If choice is 0, leaves them as is.
+    Both lists must have the same length.
+    """
+    var mask = -choice  # 1 -> 0xFF, 0 -> 0x00
+    for i in range(len(a)):
+        var t = mask & (a[i] ^ b[i])
+        a[i] ^= t
+        b[i] ^= t
+
+
+fn zeroize(mut b: List[UInt8]):
+    """Overwrite memory with zeros.
+    Used to clear sensitive material from memory.
+    """
+    for i in range(len(b)):
+        b[i] = 0

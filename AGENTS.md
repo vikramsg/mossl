@@ -93,7 +93,16 @@ Prefer using the standard library modules instead of writing custom code.
 - **time**: Timing operations: monotonic clocks, performance counters, sleep, time_function.
 - **utils**
 
+## Working with github libraries
 
+There are various situations where you may want to work with repositories on Github. 
+
+1. Integrate an external library into the project, in which case we need to know the library's API's. 
+2. Understand how another library works. 
+3. Obtain data from it. 
+
+In all these cases prefer cloning these repos into `/tmp`, using `git clone <REPO URL> /tmp/repo` and then searching through the repo.
+Use web search only if you are not sure about the correct location of the repo.
 
 ## Pixi
 

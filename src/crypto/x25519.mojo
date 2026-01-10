@@ -271,51 +271,47 @@ fn fe_from_bytes(s: List[UInt8]) -> List[UInt64]:
     return out^
 
 
-fn fe_ge_p(f: List[UInt64]) -> Bool:
-    var p4v = p4()
-    var p3v = p3()
-    var p2v = p2()
-    var p1v = p1()
+fn fe_final_reduce(f_in: List[UInt64]) -> List[UInt64]:
+    var f = fe_carry(f_in)
     var p0v = p0()
-    if f[4] > p4v:
-        return True
-    if f[4] < p4v:
-        return False
-    if f[3] > p3v:
-        return True
-    if f[3] < p3v:
-        return False
-    if f[2] > p2v:
-        return True
-    if f[2] < p2v:
-        return False
-    if f[1] > p1v:
-        return True
-    if f[1] < p1v:
-        return False
-    return f[0] >= p0v
+    var p1v = p1()
+    var p2v = p2()
+    var p3v = p3()
+    var p4v = p4()
+    var m = mask()
 
+    # Sub p
+    var borrow = UInt64(0)
+    var r0 = f[0] - p0v - borrow
+    borrow = (r0 >> 63) & 1
+    r0 &= m
 
-fn fe_sub_p(f: List[UInt64]) -> List[UInt64]:
+    var r1 = f[1] - p1v - borrow
+    borrow = (r1 >> 63) & 1
+    r1 &= m
+
+    var r2 = f[2] - p2v - borrow
+    borrow = (r2 >> 63) & 1
+    r2 &= m
+
+    var r3 = f[3] - p3v - borrow
+    borrow = (r3 >> 63) & 1
+    r3 &= m
+
+    var r4 = f[4] - p4v - borrow
+    borrow = (r4 >> 63) & 1
+    r4 &= m
+
+    # If borrow is 1, f < p, return f
+    # If borrow is 0, f >= p, return r
+    var b_mask = UInt64(0) - borrow  # 1 -> all 1s, 0 -> all 0s
+
     var out = List[UInt64]()
-    var borrow = Int(0)
-    var basev = Int(base())
-    var p = List[UInt64]()
-    p.append(p0())
-    p.append(p1())
-    p.append(p2())
-    p.append(p3())
-    p.append(p4())
-    var i = 0
-    while i < 5:
-        var tmp = Int(f[i]) - Int(p[i]) - borrow
-        if tmp < 0:
-            tmp += basev
-            borrow = 1
-        else:
-            borrow = 0
-        out.append(UInt64(tmp))
-        i += 1
+    out.append((b_mask & f[0]) | (~b_mask & r0))
+    out.append((b_mask & f[1]) | (~b_mask & r1))
+    out.append((b_mask & f[2]) | (~b_mask & r2))
+    out.append((b_mask & f[3]) | (~b_mask & r3))
+    out.append((b_mask & f[4]) | (~b_mask & r4))
     return out^
 
 
@@ -327,9 +323,7 @@ fn append_u64_le(mut buf: List[UInt8], value: UInt64):
 
 
 fn fe_to_bytes(f_in: List[UInt64]) -> List[UInt8]:
-    var f = fe_carry(f_in)
-    if fe_ge_p(f):
-        f = fe_sub_p(f)
+    var f = fe_final_reduce(f_in)
 
     var t0 = UInt64(UInt128(f[0]) | (UInt128(f[1]) << 51))
     var t1 = UInt64((UInt128(f[1]) >> 13) | (UInt128(f[2]) << 38))
@@ -354,6 +348,14 @@ fn clamp_scalar(k_in: List[UInt8]) -> List[UInt8]:
     return k^
 
 
+fn fe_swap(mut a: List[UInt64], mut b: List[UInt64], choice: Int):
+    var mask = UInt64(0) - UInt64(choice)
+    for i in range(5):
+        var t = mask & (a[i] ^ b[i])
+        a[i] ^= t
+        b[i] ^= t
+
+
 fn x25519(scalar: List[UInt8], u: List[UInt8]) -> List[UInt8]:
     var k = clamp_scalar(scalar)
     var x1 = fe_from_bytes(u)
@@ -369,13 +371,8 @@ fn x25519(scalar: List[UInt8], u: List[UInt8]) -> List[UInt8]:
         var bit_index = t & 7
         var kt = (Int(k[byte_index]) >> bit_index) & 1
         swap ^= kt
-        if swap == 1:
-            var tmp = x2.copy()
-            x2 = x3.copy()
-            x3 = tmp.copy()
-            tmp = z2.copy()
-            z2 = z3.copy()
-            z3 = tmp.copy()
+        fe_swap(x2, x3, swap)
+        fe_swap(z2, z3, swap)
         swap = kt
 
         var a = fe_add(x2, z2)
@@ -397,9 +394,8 @@ fn x25519(scalar: List[UInt8], u: List[UInt8]) -> List[UInt8]:
         z2 = z2_new.copy()
         t -= 1
 
-    if swap == 1:
-        x2 = x3.copy()
-        z2 = z3.copy()
+    fe_swap(x2, x3, swap)
+    fe_swap(z2, z3, swap)
 
     var z2_inv = fe_invert(z2)
     var out = fe_mul(x2, z2_inv)

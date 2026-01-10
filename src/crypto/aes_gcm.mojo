@@ -7,6 +7,8 @@ from builtin.simd import SIMD
 from collections import List, InlineArray
 from sys import simd_width_of
 
+from crypto.bytes import constant_time_compare
+
 alias Block16 = SIMD[DType.uint8, 16]
 
 # --- Tables ---
@@ -526,6 +528,10 @@ fn aes_encrypt_block(key: List[UInt8], block: List[UInt8]) -> List[UInt8]:
 fn aes_gcm_seal(
     key: List[UInt8], iv: List[UInt8], aad: List[UInt8], plaintext: List[UInt8]
 ) -> (List[UInt8], List[UInt8]):
+    # NIST SP 800-38D: IV length must be at least 1 bit (1 byte here for simplicity).
+    if len(iv) == 0:
+        return (List[UInt8](), List[UInt8]())
+
     # 1. Expand Key
     var key_arr = InlineArray[UInt8, 16](0)
     for i in range(16):
@@ -714,6 +720,10 @@ fn aes_gcm_open(
     ciphertext: List[UInt8],
     tag: List[UInt8],
 ) -> (List[UInt8], Bool):
+    # NIST SP 800-38D: IV length must be at least 1 bit.
+    if len(iv) == 0:
+        return (List[UInt8](), False)
+
     # 1. Expand Key
     var key_arr = InlineArray[UInt8, 16](0)
     for i in range(16):
@@ -816,10 +826,12 @@ fn aes_gcm_open(
     if len(tag) != 16:
         tag_valid = False
     else:
-        var input_tag_u128 = UInt128(0)
+        var calculated_tag = List[UInt8]()
         for i in range(16):
-            input_tag_u128 = (input_tag_u128 << 8) | UInt128(tag[i])
-        if input_tag_u128 != calculated_tag_u128:
+            var shift = (15 - i) * 8
+            calculated_tag.append(UInt8((calculated_tag_u128 >> shift) & 0xFF))
+
+        if not constant_time_compare(tag, calculated_tag):
             tag_valid = False
 
     if not tag_valid:

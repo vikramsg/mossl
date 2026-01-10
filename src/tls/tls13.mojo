@@ -154,15 +154,11 @@ fn derive_secret(
     return hkdf_expand_label(secret, label, transcript_hash, 32)
 
 
-fn random_bytes(count: Int) -> List[UInt8]:
-    var seed = UInt64(0x9E3779B97F4A7C15)
-    var out = List[UInt8]()
-    var i = 0
-    while i < count:
-        seed = seed * UInt64(6364136223846793005) + UInt64(1)
-        out.append(UInt8((seed >> 24) & UInt64(0xFF)))
-        i += 1
-    return out^
+fn random_bytes(count: Int) raises -> List[UInt8]:
+    var f = open("/dev/urandom", "r")
+    var b = f.read_bytes(count)
+    f.close()
+    return b^
 
 
 struct ByteCursor:
