@@ -1,6 +1,8 @@
 """Pure Mojo X25519 implementation (RFC 7748)."""
 from collections import List
 
+from crypto.bytes import zeroize
+
 
 fn mask() -> UInt64:
     return (UInt64(1) << 51) - UInt64(1)
@@ -399,4 +401,6 @@ fn x25519(scalar: List[UInt8], u: List[UInt8]) -> List[UInt8]:
 
     var z2_inv = fe_invert(z2)
     var out = fe_mul(x2, z2_inv)
-    return fe_to_bytes(out)
+    var res = fe_to_bytes(out)
+    zeroize(k)
+    return res^

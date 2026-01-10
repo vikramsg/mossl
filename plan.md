@@ -35,28 +35,29 @@ Address side-channel vulnerabilities by removing secret-dependent branching and 
 - [ ] **AES-GCM Hardening**:
     - [x] Replace `if input_tag_u128 != calculated_tag_u128` with `constant_time_compare`.
     - [ ] **Critical**: Implement bit-sliced AES or a table-less approach to eliminate cache-timing leaks from S-Box lookups.
-- [ ] **X25519 Hardening**:
+- [x] **X25519 Hardening**:
     - [x] Replace Montgomery ladder branching (`if swap == 1`) with a constant-time conditional swap (CSWAP).
-    - [ ] Audit field arithmetic (`fe_ge_p`, etc.) to remove all secret-dependent branches.
+    - [x] Audit field arithmetic (`fe_ge_p`, etc.) to remove all secret-dependent branches.
 - [x] **CSPRNG**:
     - [x] Replace the deterministic `random_bytes` in `src/tls/tls13.mojo` with a secure wrapper around `/dev/urandom`.
-- [ ] **Zeroization**:
-    - [ ] Add `zeroize()` calls to clear keys and ephemeral secrets from memory after use.
+- [x] **Zeroization**:
+    - [x] Add `zeroize()` calls to clear keys and ephemeral secrets from memory after use.
 
 ### Phase 2 Verification (Side-Channel Testing)
 Standard functional tests cannot detect timing leaks. These specialized tests are required:
-- [ ] **Statistical Timing Analysis (dudect)**:
-    - [ ] Implement a `dudect` style test harness that runs primitives with fixed vs. random inputs and uses Welch's t-test to detect timing differences.
+- [x] **Statistical Timing Analysis (dudect)**:
+    - [x] Implement a `dudect` style test harness that runs primitives with fixed vs. random inputs and uses Welch's t-test to detect timing differences.
 - [ ] **Secret-Dependent Branch Detection**:
     - [ ] Use a tool (or manual assembly audit) to ensure that the compiler has not introduced conditional branches in the "hardened" paths.
-- [ ] **Negative Differential Testing**:
-    - [ ] Test with incorrect tags, corrupted ciphertexts, and invalid X25519 points to ensure that error paths are also constant-time.
+- [x] **Negative Differential Testing**:
+    - [x] Test with incorrect tags, corrupted ciphertexts, and invalid X25519 points to ensure that error paths are also constant-time.
 
 ## Phase 3: Performance Optimization
 Leverage Mojo's unique features to improve throughput while maintaining security.
 
-- [ ] **SIMD SHA-256**:
-    - [ ] Vectorize the SHA-256 message schedule ($\sigma$ functions) using Mojo `SIMD` types.
+- [x] **SIMD SHA-256**:
+    - [x] Vectorize the SHA-256 message schedule ($\sigma$ functions) using Mojo `SIMD` types.
+    - [x] Use `UInt32` and `InlineArray` to improve scalar performance and reduce allocations.
 - [ ] **SIMD AES**:
     - [ ] Optimize the record layer by using SIMD for block XORs and parallel processing of multiple blocks where possible.
 - [ ] **Memory Management**:

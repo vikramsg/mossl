@@ -442,6 +442,11 @@ struct AESContextInline(Movable):
         var mask = high * 27
         return (v << 1) ^ mask
 
+    fn zeroize(mut self):
+        # FIXME: Why is this 11. Should include docstring
+        for i in range(11):
+            self.round_keys[i] = Block16(0)
+
 
 # --- GHASH Context (Comb Table) ---
 
@@ -710,6 +715,7 @@ fn aes_gcm_seal(
         var shift = (15 - i) * 8
         tag.append(UInt8((tag_u128 >> shift) & 0xFF))
 
+    ctx.zeroize()
     return (res^, tag^)
 
 
@@ -895,4 +901,5 @@ fn aes_gcm_open(
                 res.append(ciphertext[idx + i] ^ ks_vec[i])
             idx += 16
 
+    ctx.zeroize()
     return (res^, True)
