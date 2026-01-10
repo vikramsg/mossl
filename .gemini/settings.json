@@ -9,6 +9,15 @@
       "name": "gemini-3-flash-preview"
     },
     "ui": {
-      "theme": "Dracula"
+      "theme": "Dracula",
+      "hideBanner": true,
+      "footer": {
+        "hideContextPercentage": false
+      },
+      "showMemoryUsage": true,
+      "useAlternateBuffer": true
+    },
+    "experimental": {
+      "skills": true
     }
   }
