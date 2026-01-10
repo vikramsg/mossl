@@ -27,12 +27,17 @@ We follow the following process for coding:
     - If the code is expected to take longer than 60 seconds, use a larger timeout.
     - This ensures if the code hangs, it will be killed and the test will fail.
 
-
 ## Mojo 
 
-## Repo
+### Repo
 
 https://github.com/modular/modular
+
+### Functions
+
+- Prefer **NEVER** mutating variables within a function. fn(mut a):a += 1.... Always return values.
+- Never return Tuples. If multiple values have to be returned prefer creating a @fieldwise_init struct
+- Prefer creating traits for reusable code.
 
 ### List Comprehension
 Mojo supports list comprehensions. For example, to build a `List[UInt8]` of 16 zeros:
