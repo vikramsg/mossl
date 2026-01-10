@@ -3,3 +3,4 @@
 3. Look at arch suggestions. 
 4. Look at TLS spec. 
 5. Figure out how to make a https client without hardcoding it. 
+6. Add logging
