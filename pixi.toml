@@ -22,7 +22,7 @@ test-tls = "mojo run -I src tests/tls/test_record_layer.mojo && mojo run -I src 
 test-random = "mojo run -I src tests/tls/test_random.mojo"
 test-https = "mojo run -I src tests/integration/test_https_get.mojo"
 test-trace = "mojo run -I src scripts/trace_runner.mojo tests/trace_config.json"
-test-all = { depends-on = ["test-specs", "test-crypto", "test-pki", "test-tls", "test-https", "test-trace"] }
+test-all = { depends-on = ["test-crypto", "test-tls", "test-https", "test-pki", "test-trace", "test-specs"] }
 
 [dependencies]
 mojo = ">=0.25.6,<0.26"

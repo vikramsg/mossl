@@ -1,6 +1,6 @@
 """
 Usage:
-    pixi run mojo -I src scripts/lightbug_https_get.mojo
+    pixi run mojo -I src scripts/https_get.mojo
 """
 from lightbug_http import HTTPRequest, URI, to_string
 
