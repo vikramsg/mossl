@@ -1,9 +1,10 @@
 {
     "name": "ssl.mojo",
-    "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
     "features": {
-        "ghcr.io/devcontainers/features/common-utils:1": {
-            "installZsh": true,
+        "ghcr.io/devcontainers/features/common-utils:2": {
             "configureZshAsDefaultShell": true
         },
         "ghcr.io/devcontainers/features/node:1": {
@@ -12,7 +13,11 @@
     },
     "mounts": [
         "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
-        "source=${localEnv:HOME}/.ssh,target=/tmp/host-ssh,type=bind,consistency=cached"
+        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.claude.json,target=/home/vscode/.claude.json,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.zshrc,target=/home/vscode/.zshrc,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,consistency=cached"
     ],
     "customizations": {
         "vscode": {
@@ -25,10 +30,11 @@
             ],
             "settings": {
                 "python.defaultInterpreterPath": ".pixi/envs/default/bin/python",
-                "formatter.formatOnSave": true
+                "formatter.formatOnSave": true,
+                "terminal.integrated.defaultProfile.linux": "zsh"
             }
         }
     },
-    "postCreateCommand": ".devcontainer/post-create.sh",
+    "postCreateCommand": "/bin/bash .devcontainer/post-create.sh",
     "remoteUser": "vscode"
 }

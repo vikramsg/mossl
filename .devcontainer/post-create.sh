@@ -1,59 +1,73 @@
 #!/bin/bash
 set -e
+LOG_FILE="/tmp/post-create.log"
+echo "Starting post-create.sh at $(date)" > $LOG_FILE
 
-# Source profile to ensure PATH includes npm and other tools
-if [ -f ~/.bashrc ]; then
-    source ~/.bashrc
-fi
+# Use $HOME instead of ~ for reliability in scripts
+HOME_DIR="/home/vscode"
 
-# Copy SSH keys from mounted location to ~/.ssh with correct ownership and permissions
-if [ -d /tmp/host-ssh ] && [ -n "$(ls -A /tmp/host-ssh 2>/dev/null)" ]; then
-  # Create .ssh directory with correct ownership
-  mkdir -p ~/.ssh
-  chmod 700 ~/.ssh
-  
-  # Copy all SSH files from mounted location (this creates files with correct ownership)
-  cp -r /tmp/host-ssh/* ~/.ssh/ 2>/dev/null || true
-  
-  # Set correct permissions on all SSH files
-  chmod 700 ~/.ssh
-  chmod 600 ~/.ssh/id_* ~/.ssh/*.pem 2>/dev/null || true
-  chmod 644 ~/.ssh/*.pub 2>/dev/null || true
-  [ -f ~/.ssh/config ] && chmod 600 ~/.ssh/config || true
-  [ -f ~/.ssh/known_hosts ] && chmod 644 ~/.ssh/known_hosts || true
-  [ -f ~/.ssh/known_hosts.old ] && chmod 644 ~/.ssh/known_hosts.old || true
-fi
-
-# Install Pixi
-if ! command -v pixi &> /dev/null; then
-    echo "Installing Pixi..."
-    curl -fsSL https://pixi.sh/install.sh | bash
-    export PATH="$HOME/.pixi/bin:$PATH"
-    echo 'export PATH="$HOME/.pixi/bin:$PATH"' >> ~/.bashrc
-    source ~/.bashrc
+# Fix SSH permissions for bind-mounted .ssh directory
+if [ -d "$HOME_DIR/.ssh" ]; then
+    echo "SSH directory found. Fixing permissions..." >> $LOG_FILE
+    
+    # Create local ssh config directory
+    mkdir -p "$HOME_DIR/.ssh_local"
+    
+    if [ -f "$HOME_DIR/.ssh/config" ]; then
+        echo "Found SSH config. Copying to local..." >> $LOG_FILE
+        cp "$HOME_DIR/.ssh/config" "$HOME_DIR/.ssh_local/config"
+        chmod 600 "$HOME_DIR/.ssh_local/config"
+        
+        SSH_CMD="ssh -F $HOME_DIR/.ssh_local/config"
+        GIT_EXPORT="export GIT_SSH_COMMAND=\"$SSH_CMD\""
+        
+        # Add to .zshrc if not already present
+        if ! grep -q "GIT_SSH_COMMAND" "$HOME_DIR/.zshrc" 2>/dev/null; then
+            echo "Adding GIT_SSH_COMMAND to .zshrc" >> $LOG_FILE
+            echo "" >> "$HOME_DIR/.zshrc"
+            echo "# Added by post-create.sh" >> "$HOME_DIR/.zshrc"
+            echo "$GIT_EXPORT" >> "$HOME_DIR/.zshrc"
+        fi
+        
+        # Add to .bashrc if not already present
+        if ! grep -q "GIT_SSH_COMMAND" "$HOME_DIR/.bashrc" 2>/dev/null; then
+            echo "Adding GIT_SSH_COMMAND to .bashrc" >> $LOG_FILE
+            echo "$GIT_EXPORT" >> "$HOME_DIR/.bashrc"
+        fi
+    else
+        echo "No SSH config found in $HOME_DIR/.ssh" >> $LOG_FILE
+    fi
+    
+    # Keys themselves might have bad permissions if they are bind-mounted
+    # Note: chmod might fail on a read-only bind mount, so we ignore errors
+    echo "Attempting to fix key permissions..." >> $LOG_FILE
+    find "$HOME_DIR/.ssh" -type f -name "id_*" -exec chmod 600 {} + 2>/dev/null || true
+else
+    echo "SSH directory $HOME_DIR/.ssh not found." >> $LOG_FILE
 fi
 
 # Fix permissions on .pixi directory (in case it's a mounted volume)
 if [ -d ".pixi" ]; then
-    echo "Fixing permissions on .pixi directory..."
-    sudo chown -R "$(id -u):$(id -g)" .pixi
+    echo "Fixing permissions on .pixi directory..." >> $LOG_FILE
+    sudo chown -R vscode:vscode .pixi
 fi
 
 # Install pixi dependencies
-pixi install
+echo "Running pixi install..." >> $LOG_FILE
+pixi install >> $LOG_FILE 2>&1
 
-# Configure npm to install global packages in user directory (no sudo needed)
-if command -v npm &> /dev/null; then
-    # Set npm prefix to user directory
-    mkdir -p ~/.npm-global
-    npm config set prefix '~/.npm-global'
-    export PATH=~/.npm-global/bin:$PATH
-    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
-    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.zshrc
-    
-    # Install Coding CLI without sudo
-    echo "Installing Gemini CLI..."
-    npm install -g @google/gemini-cli  @openai/codex
-else
-    echo "Warning: npm not found. Skipping Coding CLI installation."
+# Ensure npm prefix is unset to avoid nvm conflicts
+if [ -f "$HOME_DIR/.npmrc" ]; then
+    echo "Cleaning $HOME_DIR/.npmrc..." >> $LOG_FILE
+    sed -i '/prefix=/d' "$HOME_DIR/.npmrc"
+    sed -i '/globalconfig=/d' "$HOME_DIR/.npmrc"
 fi
+
+if command -v npm &> /dev/null; then
+    echo "Installing Gemini CLI..." >> $LOG_FILE
+    npm install -g @google/gemini-cli @openai/codex >> $LOG_FILE 2>&1
+else
+    echo "Warning: npm not found." >> $LOG_FILE
+fi
+
+echo "post-create.sh finished at $(date)" >> $LOG_FILE
