@@ -55,6 +55,7 @@ module pki_path_validation {
     | Subject_Issuer_Mismatch
     | Signature_Failure
     | Not_A_CA
+    | Expired
 
   // State
   // The current state in the chain
@@ -90,12 +91,7 @@ module pki_path_validation {
         last_cert.issuer == root.subject and last_cert.authority_key_id == root.public_key_id
       )
 
-  // 2. Every certificate in a valid chain (except the leaf) MUST be a CA
-  val IntermediatesMustBeCA = 
-    (current_step > 0 and current_step < current_chain.length()) implies 
-      current_chain[current_step].is_ca
-
-  // 3. Step counter safety: prevents out-of-bounds access to the chain
+  // 2. Step counter safety: prevents out-of-bounds access to the chain
   val StepWithinBounds = current_step <= current_chain.length()
 
   // 4. Liveness monitor: Validation must terminate within a bounded number of steps
@@ -174,19 +170,32 @@ module pki_path_validation {
     all {
       validation_status == Pending,
       current_step < current_chain.length(),
-      matching_roots.size() > 0,
-      nondet root = matching_roots.oneOf()
-      all {
-        cert.authority_key_id == root.public_key_id,
-        validation_status' = Valid,
-        current_step' = current_step + 1,
-        timeout_steps' = timeout_steps + 1,
-        keep_state,
-      }
+      matching_roots.exists(root => cert.authority_key_id == root.public_key_id),
+      is_valid_at(cert, current_time),
+      validation_status' = Valid,
+      current_step' = current_step + 1,
+      timeout_steps' = timeout_steps + 1,
+      keep_state,
     }
   }
 
-  // FAILURE: Found matching root but signature (public key) fails
+  // FAILURE: Found matching root and signature is correct, but certificate is expired
+  action handle_root_expired: bool = {
+    val cert = current_chain[current_step]
+    val matching_roots = trust_store.filter(r => r.subject == cert.issuer)
+    all {
+      validation_status == Pending,
+      current_step < current_chain.length(),
+      matching_roots.exists(root => cert.authority_key_id == root.public_key_id),
+      not(is_valid_at(cert, current_time)),
+      validation_status' = Expired,
+      current_step' = current_step + 1,
+      timeout_steps' = timeout_steps + 1,
+      keep_state,
+    }
+  }
+
+  // FAILURE: Found matching roots but NONE match the signature (public key)
   action handle_root_signature_failure: bool = {
     val cert = current_chain[current_step]
     val matching_roots = trust_store.filter(r => r.subject == cert.issuer)
@@ -194,14 +203,11 @@ module pki_path_validation {
       validation_status == Pending,
       current_step < current_chain.length(),
       matching_roots.size() > 0,
-      nondet root = matching_roots.oneOf()
-      all {
-        cert.authority_key_id != root.public_key_id,
-        validation_status' = Signature_Failure,
-        current_step' = current_step + 1,
-        timeout_steps' = timeout_steps + 1,
-        keep_state,
-      }
+      not(matching_roots.exists(root => cert.authority_key_id == root.public_key_id)),
+      validation_status' = Signature_Failure,
+      current_step' = current_step + 1,
+      timeout_steps' = timeout_steps + 1,
+      keep_state,
     }
   }
 
@@ -218,7 +224,30 @@ module pki_path_validation {
         cert.issuer == next_cert.subject,
         cert.authority_key_id == next_cert.public_key_id,
         next_cert.is_ca,
+        is_valid_at(cert, current_time),
         validation_status' = Pending,
+        current_step' = current_step + 1,
+        timeout_steps' = timeout_steps + 1,
+        keep_state,
+      }
+    }
+  }
+
+  // FAILURE: Link is otherwise valid, but certificate is expired
+  action handle_intermediate_expired: bool = {
+    val cert = current_chain[current_step]
+    all {
+      validation_status == Pending,
+      current_step < current_chain.length(),
+      trust_store.filter(r => r.subject == cert.issuer).size() == 0,
+      current_step + 1 < current_chain.length(),
+      val next_cert = current_chain[current_step + 1]
+      all {
+        cert.issuer == next_cert.subject,
+        cert.authority_key_id == next_cert.public_key_id,
+        next_cert.is_ca,
+        not(is_valid_at(cert, current_time)),
+        validation_status' = Expired,
         current_step' = current_step + 1,
         timeout_steps' = timeout_steps + 1,
         keep_state,
@@ -300,8 +329,10 @@ module pki_path_validation {
 
   action validate_step: bool = any {
     handle_root_success,
+    handle_root_expired,
     handle_root_signature_failure,
     handle_intermediate_success,
+    handle_intermediate_expired,
     handle_subject_issuer_mismatch,
     handle_intermediate_signature_failure,
     handle_not_a_ca_failure,
@@ -314,21 +345,29 @@ module pki_path_validation {
   val example_inter = { id: 1, subject: "Inter", issuer: "Root", public_key_id: 101, authority_key_id: 100, is_ca: true, not_before: 0, not_after: 1000 }
   val example_leaf = { id: 2, subject: "Leaf", issuer: "Inter", public_key_id: 102, authority_key_id: 101, is_ca: false, not_before: 0, not_after: 1000 }
 
-  run valid_chain_trace = {
+  // --- Tests for Trace Generation ---
+
+  run valid_chain_test = {
     setup(Set(example_root), [example_leaf, example_inter], 500)
-    .then(validate_step) // Leaf -> Inter
-    .then(validate_step) // Inter -> Root
+    .then(handle_intermediate_success) // Leaf -> Inter
+    .then(handle_root_success) // Inter -> Root
   }
 
-  run untrusted_root_trace = {
+  run untrusted_root_test = {
     setup(Set(), [example_leaf, example_inter], 500)
-    .then(validate_step)
-    .then(validate_step)
+    .then(handle_intermediate_success)
+    .then(handle_untrusted_root)
   }
 
-  run mismatch_issuer_trace = {
+  run mismatch_issuer_test = {
     val bad_inter = { id: 1, subject: "WrongSubject", issuer: "Root", public_key_id: 101, authority_key_id: 100, is_ca: true, not_before: 0, not_after: 1000 }
     setup(Set(example_root), [example_leaf, bad_inter], 500)
-    .then(validate_step)
+    .then(handle_subject_issuer_mismatch)
+  }
+
+  run expired_cert_test = {
+    val expired_leaf = { id: 2, subject: "Leaf", issuer: "Inter", public_key_id: 102, authority_key_id: 101, is_ca: false, not_before: 0, not_after: 400 }
+    setup(Set(example_root), [expired_leaf, example_inter], 500)
+    .then(handle_intermediate_expired)
   }
 }

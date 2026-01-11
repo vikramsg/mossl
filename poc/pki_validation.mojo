@@ -1,5 +1,6 @@
 from collections import List
 from testing import assert_equal, assert_true
+
 import emberjson
 
 # ===----------------------------------------------------------------------=== #
@@ -34,6 +35,8 @@ struct ValidationStatus(EqualityComparable, Stringable):
             return "Signature_Failure"
         if self == Self.NOT_A_CA:
             return "Not_A_CA"
+        if self == Self.EXPIRED:
+            return "Expired"
         return "Unknown(" + String(self.value) + ")"
 
     alias PENDING = ValidationStatus(0)
@@ -42,6 +45,7 @@ struct ValidationStatus(EqualityComparable, Stringable):
     alias SUBJECT_ISSUER_MISMATCH = ValidationStatus(3)
     alias SIGNATURE_FAILURE = ValidationStatus(4)
     alias NOT_A_CA = ValidationStatus(5)
+    alias EXPIRED = ValidationStatus(6)
 
     @staticmethod
     fn from_string(s: String) -> ValidationStatus:
@@ -57,6 +61,8 @@ struct ValidationStatus(EqualityComparable, Stringable):
             return Self.SIGNATURE_FAILURE
         if s == "Not_A_CA":
             return Self.NOT_A_CA
+        if s == "Expired":
+            return Self.EXPIRED
         return ValidationStatus(-1)
 
 
@@ -73,6 +79,8 @@ struct MockCertificate:
     var public_key_id: Int
     var authority_key_id: Int
     var is_ca: Bool
+    var not_before: Int
+    var not_after: Int
 
     fn __init__(
         out self,
@@ -82,6 +90,8 @@ struct MockCertificate:
         public_key_id: Int,
         authority_key_id: Int,
         is_ca: Bool,
+        not_before: Int,
+        not_after: Int,
     ):
         self.id = id
         self.subject = subject
@@ -89,6 +99,8 @@ struct MockCertificate:
         self.public_key_id = public_key_id
         self.authority_key_id = authority_key_id
         self.is_ca = is_ca
+        self.not_before = not_before
+        self.not_after = not_after
 
     fn copy(self) -> MockCertificate:
         return self
@@ -103,16 +115,19 @@ struct PKIValidator:
     var current_chain: List[MockCertificate]
     var status: ValidationStatus
     var step: Int
+    var current_time: Int
 
     fn __init__(
         out self,
         var trust_store: List[MockCertificate],
         var chain: List[MockCertificate],
+        current_time: Int,
     ):
         self.trust_store = trust_store^
         self.current_chain = chain^
         self.status = ValidationStatus.PENDING
         self.step = 0
+        self.current_time = current_time
 
     @always_inline
     fn dispatch[action_id: Int](mut self) -> Bool:
@@ -126,16 +141,20 @@ struct PKIValidator:
         elif action_id == 1:
             return self.handle_root_success()
         elif action_id == 2:
-            return self.handle_root_signature_failure()
+            return self.handle_root_expired()
         elif action_id == 3:
-            return self.handle_intermediate_success()
+            return self.handle_root_signature_failure()
         elif action_id == 4:
-            return self.handle_subject_issuer_mismatch()
+            return self.handle_intermediate_success()
         elif action_id == 5:
-            return self.handle_intermediate_signature_failure()
+            return self.handle_intermediate_expired()
         elif action_id == 6:
-            return self.handle_not_a_ca_failure()
+            return self.handle_subject_issuer_mismatch()
         elif action_id == 7:
+            return self.handle_intermediate_signature_failure()
+        elif action_id == 8:
+            return self.handle_not_a_ca_failure()
+        elif action_id == 9:
             return self.handle_untrusted_root()
         return False
 
@@ -144,7 +163,7 @@ struct PKIValidator:
         Automatic dispatcher: specialized at compile-time to iterate over all actions.
         """
         @parameter
-        for i in range(8):
+        for i in range(10):
             if self.dispatch[i]():
                 return
 
@@ -163,20 +182,45 @@ struct PKIValidator:
             var root = self.trust_store[i]
             if cert.issuer == root.subject:
                 if cert.authority_key_id == root.public_key_id:
-                    self.status = ValidationStatus.VALID
-                    self.step += 1
-                    return True
+                    if (
+                        self.current_time >= cert.not_before
+                        and self.current_time <= cert.not_after
+                    ):
+                        self.status = ValidationStatus.VALID
+                        self.step += 1
+                        return True
         return False
 
-    fn handle_root_signature_failure(mut self) -> Bool:
+    fn handle_root_expired(mut self) -> Bool:
         var cert = self.current_chain[self.step]
         for i in range(len(self.trust_store)):
             var root = self.trust_store[i]
             if cert.issuer == root.subject:
-                if cert.authority_key_id != root.public_key_id:
-                    self.status = ValidationStatus.SIGNATURE_FAILURE
-                    self.step += 1
-                    return True
+                if cert.authority_key_id == root.public_key_id:
+                    if (
+                        self.current_time < cert.not_before
+                        or self.current_time > cert.not_after
+                    ):
+                        self.status = ValidationStatus.EXPIRED
+                        self.step += 1
+                        return True
+        return False
+
+    fn handle_root_signature_failure(mut self) -> Bool:
+        var cert = self.current_chain[self.step]
+        var found_matching_subject = False
+        for i in range(len(self.trust_store)):
+            var root = self.trust_store[i]
+            if cert.issuer == root.subject:
+                found_matching_subject = True
+                if cert.authority_key_id == root.public_key_id:
+                    # If ANY matches, it's not a signature failure
+                    return False
+
+        if found_matching_subject:
+            self.status = ValidationStatus.SIGNATURE_FAILURE
+            self.step += 1
+            return True
         return False
 
     fn handle_intermediate_success(mut self) -> Bool:
@@ -191,8 +235,33 @@ struct PKIValidator:
             and cert.authority_key_id == next_cert.public_key_id
             and next_cert.is_ca
         ):
-            self.step += 1
-            return True
+            if (
+                self.current_time >= cert.not_before
+                and self.current_time <= cert.not_after
+            ):
+                self.step += 1
+                return True
+        return False
+
+    fn handle_intermediate_expired(mut self) -> Bool:
+        if self.step + 1 >= len(self.current_chain):
+            return False
+
+        var cert = self.current_chain[self.step]
+        var next_cert = self.current_chain[self.step + 1]
+
+        if (
+            cert.issuer == next_cert.subject
+            and cert.authority_key_id == next_cert.public_key_id
+            and next_cert.is_ca
+        ):
+            if (
+                self.current_time < cert.not_before
+                or self.current_time > cert.not_after
+            ):
+                self.status = ValidationStatus.EXPIRED
+                self.step += 1
+                return True
         return False
 
     fn handle_subject_issuer_mismatch(mut self) -> Bool:
@@ -273,8 +342,17 @@ fn parse_cert_json(val: emberjson.Value) raises -> MockCertificate:
     var is_ca = obj["is_ca"].copy().bool()
     var issuer = mock_hash(obj["issuer"].copy().string())
     var subject = mock_hash(obj["subject"].copy().string())
+    var not_before = Int(obj["not_before"].copy()["#bigint"].copy().string())
+    var not_after = Int(obj["not_after"].copy()["#bigint"].copy().string())
     return MockCertificate(
-        id, subject, issuer, public_key_id, authority_key_id, is_ca
+        id,
+        subject,
+        issuer,
+        public_key_id,
+        authority_key_id,
+        is_ca,
+        not_before,
+        not_after,
     )
 
 
@@ -299,7 +377,9 @@ fn test_with_trace(path: String) raises:
     for i in range(len(chain_json)):
         chain.append(parse_cert_json(chain_json[i].copy()))
 
-    var validator = PKIValidator(trust_store^, chain^)
+    var current_time = Int(s0["current_time"].copy()["#bigint"].copy().string())
+
+    var validator = PKIValidator(trust_store^, chain^, current_time)
 
     for i in range(len(states)):
         var current_state = states[i].copy()
@@ -328,5 +408,6 @@ fn main() raises:
     test_with_trace("poc/valid.itf.json")
     test_with_trace("poc/untrusted.itf.json")
     test_with_trace("poc/mismatch.itf.json")
+    test_with_trace("poc/expired.itf.json")
 
     print("All Declarative POC tests passed!")
