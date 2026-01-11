@@ -1,7 +1,5 @@
 # Public Key Infrastructure (PKI)
 
-This document describes the PKI implementation in `ssl.mojo`, focusing on certificate parsing, trust management, and path validation.
-
 ## Architecture Overview
 
 The PKI layer is responsible for establishing trust in the server's identity during the TLS handshake. It bridges the gap between raw bytes (ASN.1 DER) and cryptographic verification (RSA/ECDSA).
