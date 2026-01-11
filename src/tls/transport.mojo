@@ -3,7 +3,6 @@ from lightbug_http.address import TCPAddr
 from lightbug_http.io.bytes import Bytes
 from memory import Span
 
-
 trait TLSTransport(Movable):
     fn read(self, mut buf: Bytes) raises -> Int:
         ...

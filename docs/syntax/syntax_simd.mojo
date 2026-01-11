@@ -1,12 +1,13 @@
-from benchmark import run, keep
 from collections import List
+
+from benchmark import run, keep
 
 fn main() raises:
     alias N = 64
     var A = List[Float32](capacity=N*N)
     var B = List[Float32](capacity=N*N)
     var C = List[Float32](capacity=N*N)
-    for i in range(N*N):
+    for _ in range(N*N):
         A.append(1.0)
         B.append(1.0)
         C.append(0.0)

@@ -4,7 +4,6 @@ from collections import List
 from crypto.bytes import concat_bytes, zeros
 from crypto.hmac import hmac_sha256
 
-
 fn hkdf_extract(salt: List[UInt8], ikm: List[UInt8]) -> List[UInt8]:
     var s = salt.copy()
     if len(s) == 0:

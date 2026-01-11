@@ -12,8 +12,6 @@ from pki.ec_arithmetic import (
     sub_limbs,
     cmp,
 )
-
-
 fn get_p256_params() -> (
     UIntLimbs[4],
     UIntLimbs[4],

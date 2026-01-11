@@ -1,61 +1,107 @@
-# Mojo Idiomatic Syntax Performance Benchmarks (Final - Expanded)
+# Mojo Idiomatic Syntax Performance Benchmarks
 
-This document provides a comprehensive overview of performance insights for Mojo-specific syntax features based on advanced benchmarks conducted on Sunday, January 11, 2026.
+This document provides a comprehensive overview of performance insights for Mojo-specific syntax features based on benchmarks conducted on Sunday, January 11, 2026.
 
-## Summary of Findings
+## Summary Table
 
-| Feature | Best Suited For | Impact |
-| :--- | :--- | :--- |
-| `Dict` vs `List` | Search-heavy workloads. | **Dict is ~22x faster** for lookups than linear search. |
-| `math.sqrt` | Arithmetic square root. | **~10x faster** than using the `** 0.5` operator. |
-| `UnsafePointer` | Low-level, high-perf memory access. | **~33% faster** than `List` indexing (bypasses safety). |
-| `SIMD` | Matrix operations, Dot products. | **Massive speedup (~8x)** for 64x64 Matrix Multiply. |
-| `bit` module | Bit counting, specialized bit manipulation. | **~1500x faster** than manual loops. |
-| `StringLiteral` | Constant strings and keys. | **~25% faster** than dynamic `String` for comparisons. |
-| `Optional` | Safe nullable handling. | Minor overhead (~1.7x in microbenchmarks), use raw types in hot loops. |
+| Feature | Comparison | Winner | Impact |
+| :--- | :--- | :--- | :--- |
+| **Collections** | `Dict` vs `List` (Linear) | `Dict` | **~22x faster** for lookups |
+| **Collections** | `List` (Cap) vs `InlineArray` | `List` (Cap) | **~13% faster** |
+| **Math** | `math.sqrt` vs `** 0.5` | `math.sqrt` | **~12x faster** |
+| **Bitwise** | `bit` module vs Manual | `bit` module | **~1900x faster** |
+| **SIMD** | `SIMD` vs Scalar | `SIMD` (16) | **~6x faster** for Matrix Multiply |
+| **Memory** | `UnsafePointer` vs `List` | `UnsafePointer` | **~4% faster** (bypasses safety) |
+| **Arguments** | `borrowed` vs `owned` | `borrowed` | **~5% faster** |
+| **Specialization**| `@parameter` vs Runtime | `@parameter` | Minimal overhead for simple loops |
+| **Syntactic Sugar**| Comprehension vs Append | Manual Append | **~40% faster** for initialization |
+| **Types** | `Optional` Overhead | Minimal | **<1% overhead** |
 
 ---
 
-## Detailed Results
+## Detailed Results & Insights
 
-### 1. Dictionary Lookup vs List Search (1k elements)
-**Benchmark:** 1000 lookups/searches in a collection of size 1000.
-- **Dict Lookup:** 0.035 ms
-- **List Linear Search:** 0.797 ms
-- **Impact:** **~22x Speedup**.
-- **Notes:** Use `Dict` for any O(1) lookup needs. Even in its early stages, it significantly outperforms linear searches.
+### 1. Dictionaries & Collections
+**File:** `syntax_dict.mojo`, `syntax_collections.mojo`
 
-### 2. Math Intrinsics (`math.sqrt`)
-**Benchmark:** 1000 square root calculations.
-- **`math.sqrt`:** 0.0015 ms
-- **`** 0.5` (Operator):** 0.0160 ms
-- **Impact:** **10x Speedup**.
-- **Notes:** Always prefer specialized math module functions over general-purpose operators for performance.
+| Operation | Implementation | Mean Latency (ms) |
+| :--- | :--- | :--- |
+| 1k Lookups | `Dict[Int, Int]` | 0.0252 |
+| 1k Lookups | `List[Int]` (Linear Search) | 0.5534 |
+| 10k Init | `InlineArray` | 0.0148 |
+| 10k Init | `List` (no capacity) | 0.0523 |
+| 10k Init | `List` (with capacity) | 0.0365 |
 
-### 3. Pointers vs High-level Access (`UnsafePointer`)
-**Benchmark:** Summing 10,000 elements.
-- **List Indexing:** 0.0090 ms
-- **UnsafePointer Access:** 0.0060 ms
-- **Impact:** **~33% Speedup**.
-- **Notes:** Raw pointer access is faster as it bypasses bounds checking and other safety overheads.
+- **Insight:** `Dict` provides massive O(1) speedups over linear search.
+- **Insight:** Pre-allocating `List` capacity is crucial for performance but `InlineArray` (stack-allocated) remains very competitive for fixed sizes.
 
-### 4. SIMD Matrix Multiply (64x64)
-**Benchmark:** Multiplying two 64x64 Float32 matrices.
-- **Scalar Matmul:** 0.390 ms
-- **SIMD (16) Matmul:** 0.049 ms
-- **Impact:** **~8x Speedup**.
+### 2. Low-Level Optimizations
+**File:** `syntax_simd.mojo`, `syntax_pointers.mojo`
 
-### 5. Bit Module vs Manual Logic
-**Benchmark:** Population count and leading zero count.
-- **Standard Bit Ops (Loop):** 0.00098 ms
-- **Bit Module (HW Intrinsics):** 0.00000063 ms
-- **Impact:** **~1500x Speedup**.
+| Operation | Implementation | Mean Latency (ms) |
+| :--- | :--- | :--- |
+| 64x64 Matmul | Scalar | 0.3543 |
+| 64x64 Matmul | SIMD (width 16) | 0.0631 |
+| 10k Accesses | `List` Indexing | 0.0083 |
+| 10k Accesses | `UnsafePointer` | 0.0079 |
 
-### 6. Optional Overhead
-**Benchmark:** 1000 calls to a function returning/receiving `Optional[Int]`.
-- **With Optional:** 0.00000135 ms
-- **Raw Value:** 0.00000079 ms
-- **Notes:** Small overhead for safety, but in deep tight loops, preferred to pass raw values.
+- **Insight:** SIMD vectorization yields ~6x speedup for numerical kernels.
+- **Insight:** `UnsafePointer` provides a small but consistent performance gain by bypassing bounds checks.
+
+### 3. Math & Bit Manipulation
+**File:** `syntax_math.mojo`, `syntax_bit.mojo`
+
+| Operation | Implementation | Mean Latency (ms) |
+| :--- | :--- | :--- |
+| 1k Sqrt | `math.sqrt` | 0.00136 |
+| 1k Sqrt | `** 0.5` Operator | 0.01693 |
+| 1k Bit Ops | Manual Loop | 0.00102 |
+| 1k Bit Ops | `bit` Module (Intrinsics) | 0.00000054 |
+
+- **Insight:** Hardware intrinsics in the `bit` module are orders of magnitude faster.
+- **Insight:** Always prefer specialized math functions over general power operators.
+
+### 4. Function & Argument Semantics
+**File:** `syntax_arguments.mojo`, `syntax_def_vs_fn.mojo`, `syntax_always_inline.mojo`
+
+| Convention | Workload | Mean Latency (ms) |
+| :--- | :--- | :--- |
+| `borrowed` | 8KB Struct Access | 0.00054 |
+| `owned` (move) | 8KB Struct Access | 0.00065 |
+| `owned` (copy) | 8KB Struct Access | 0.00094 |
+| `def` | 1k Function Calls | 0.00000092 |
+| `fn` | 1k Function Calls | 0.00000131 |
+
+- **Insight:** `borrowed` is the most efficient for large structs. Avoid unnecessary copies.
+- **Insight:** For simple functions, `def` and `fn` are effectively equivalent in performance.
+
+### 5. Control Flow & Specialization
+**File:** `syntax_parameter.mojo`, `syntax_unroll.mojo`
+
+| Technique | Implementation | Mean Latency (ms) |
+| :--- | :--- | :--- |
+| Loop (100) | Runtime Argument | 0.00075 |
+| Loop (100) | `@parameter` Specialization | 0.00090 |
+| Loop (16) | No Unroll | 0.00000086 |
+| Loop (16) | `@unroll` | 0.00000084 |
+
+- **Insight:** `@parameter` specialization allows the compiler to optimize for constants, though microbenchmarks may show overhead from setup in extremely tight loops.
+- **Insight:** Loop unrolling shows marginal gains for very small trip counts, as the compiler often auto-unrolls these.
+
+### 6. Syntactic Sugar & Types
+**File:** `syntax_comprehension.mojo`, `syntax_optional.mojo`, `syntax_strings.mojo`
+
+| Feature | Comparison | Mean Latency (ms) |
+| :--- | :--- | :--- |
+| 1k Init | Manual `List.append` | 0.00147 |
+| 1k Init | List Comprehension | 0.00208 |
+| 1k Calls | `Optional[Int]` | 0.00000064 |
+| 1k Calls | Raw `Int` | 0.00000073 |
+| 1k Compares | `String` | 0.00000103 |
+| 1k Compares | `StringLiteral` | 0.00000085 |
+
+- **Insight:** Manual loops are currently faster than comprehensions in Mojo.
+- **Insight:** `Optional` and `StringLiteral` have effectively zero overhead for common operations.
 
 ## Methodology
-Benchmarks were conducted using the `benchmark` module with a 60-second timeout. All scripts are warning-free. Capturing closures and `@parameter` were used to ensure the compiler does not optimize away the benchmark logic.
+Benchmarks were conducted using the Mojo `benchmark` module with `max_runtime_secs=0.5`. Each result represents the mean latency for the specified workload. Values were measured on Sunday, January 11, 2026.

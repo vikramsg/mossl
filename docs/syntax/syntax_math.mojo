@@ -1,5 +1,6 @@
-from benchmark import run, keep
 from math import sqrt
+
+from benchmark import run, keep
 
 fn main() raises:
     var val: Float64 = 1234.56

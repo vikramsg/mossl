@@ -1,7 +1,6 @@
 """Minimal ASN.1 DER reader helpers for X.509 parsing."""
 from collections import List
 
-
 @fieldwise_init
 struct DerSlice:
     var tag: UInt8

@@ -14,7 +14,6 @@ from tls.connect_https import connect_https
 from tls.tls_socket import TLSSocket, SocketTransport
 from tls.transport import TLSTransport
 
-
 trait HTTPReader(Movable):
     fn read(mut self, mut buf: Bytes) raises -> UInt:
         ...

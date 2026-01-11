@@ -4,7 +4,6 @@ from collections import List
 from crypto.bytes import concat_bytes, zeros
 from crypto.sha256 import sha256_bytes
 
-
 fn pad_key(key: List[UInt8], block_size: Int) -> List[UInt8]:
     var out = List[UInt8]()
     for b in key:

@@ -3,7 +3,6 @@ from sys import bitwidthof
 
 from memory import UnsafePointer
 
-
 struct UIntLimbs[N: Int](Copyable, ImplicitlyCopyable, Movable):
     var limbs: InlineArray[UInt64, N]
 

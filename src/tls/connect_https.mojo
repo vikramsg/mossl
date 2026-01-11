@@ -4,7 +4,6 @@ from lightbug_http.socket import Socket
 
 from tls.tls_socket import TLSSocket, SocketTransport
 
-
 fn connect_https(
     host: String, port: UInt16
 ) raises -> TLSSocket[SocketTransport]:

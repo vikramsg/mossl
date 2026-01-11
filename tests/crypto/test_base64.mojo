@@ -3,7 +3,6 @@ from testing import assert_equal
 
 from crypto.base64 import base64_decode
 
-
 fn test_rfc4648_vectors() raises:
     assert_equal(len(base64_decode("")), 0)
 

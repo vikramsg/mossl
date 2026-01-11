@@ -3,7 +3,6 @@ from collections import List
 
 from crypto.aes_gcm import aes_gcm_seal
 
-
 fn build_nonce(iv: List[UInt8], seq: UInt64) -> List[UInt8]:
     # Nonce = iv XOR (0^32 || seq^64) per TLS 1.3.
     var out = List[UInt8]()

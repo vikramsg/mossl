@@ -12,8 +12,6 @@ from pki.asn1 import (
     slice_bytes,
     read_bit_string,
 )
-
-
 fn parse_rsa_public_key(
     pubkey_bytes: List[UInt8],
 ) raises -> (List[UInt64], List[UInt64]):

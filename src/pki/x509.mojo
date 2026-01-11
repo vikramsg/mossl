@@ -16,8 +16,6 @@ from pki.asn1 import (
     read_bit_string,
     read_octet_string,
 )
-
-
 @fieldwise_init
 struct ParsedCertificate(Movable):
     var tbs: List[UInt8]

@@ -1,5 +1,6 @@
-from benchmark import run, keep
 from collections import Dict, List
+
+from benchmark import run, keep
 
 fn main() raises:
     alias size = 1000

@@ -1,5 +1,6 @@
-from benchmark import run, keep
 from collections import List
+
+from benchmark import run, keep
 from memory import UnsafePointer
 
 fn main() raises:

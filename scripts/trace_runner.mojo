@@ -3,7 +3,6 @@ from sys import argv
 from subprocess import run
 import emberjson
 
-
 fn main() raises:
     var config_path = "tests/trace_config.json"
     if len(argv()) > 1:

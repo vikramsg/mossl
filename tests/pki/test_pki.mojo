@@ -10,7 +10,6 @@ from pki.x509 import (
     verify_chain,
     hostname_matches,
 )
-
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
 
 

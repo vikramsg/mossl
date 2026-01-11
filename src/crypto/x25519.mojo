@@ -1,7 +1,6 @@
 """Pure Mojo X25519 implementation (RFC 7748)."""
 from collections import List
 
-
 fn mask() -> UInt64:
     return (UInt64(1) << 51) - UInt64(1)
 
