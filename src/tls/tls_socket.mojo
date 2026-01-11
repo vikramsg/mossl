@@ -10,11 +10,9 @@ from tls.tls13 import TLS13Client
 from tls.transport import TLSTransport
 
 
+@fieldwise_init
 struct SocketTransport(Movable, TLSTransport):
     var socket: Socket[TCPAddr]
-
-    fn __init__(out self, var socket: Socket[TCPAddr]):
-        self.socket = socket^
 
     fn read(self, mut buf: Bytes) raises -> Int:
         return Int(self.socket.receive(buf))

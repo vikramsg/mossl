@@ -7,6 +7,7 @@ from crypto.aes_gcm import aes_gcm_seal_internal, aes_gcm_open_internal
 from crypto.bytes import zeros
 from crypto.hmac import hmac_sha256
 from crypto.sha256 import sha256
+from crypto.x25519 import x25519
 
 fn bench_sha256(iterations: Int) raises:
     var data = List[UInt8]()
@@ -55,6 +56,20 @@ fn bench_aes_gcm(iterations: Int) raises:
     var duration = end - start
     print("AES-GCM Seal+Open (1KB, " + String(iterations) + " iterations): " + String(duration)[:6] + "s (" + String(iterations / duration)[:8] + " ops/sec)")
 
+fn bench_x25519(iterations: Int) raises:
+    var scalar = List[UInt8]()
+    for _ in range(32): scalar.append(0x01)
+    var u = List[UInt8]()
+    for _ in range(32): u.append(0x09)
+    
+    var start = perf_counter()
+    for _ in range(iterations):
+        _ = x25519(Span(scalar), Span(u))
+    var end = perf_counter()
+    
+    var duration = end - start
+    print("X25519 (32B, " + String(iterations) + " iterations): " + String(duration)[:6] + "s (" + String(iterations / duration)[:8] + " ops/sec)")
+
 fn main() raises:
     print("============================================================")
     print("Mojo Cryptography Micro-benchmark")
@@ -62,4 +77,5 @@ fn main() raises:
     bench_sha256(10000)
     bench_hmac(10000)
     bench_aes_gcm(1000)
+    bench_x25519(1000)
     print("============================================================")

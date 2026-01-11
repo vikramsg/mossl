@@ -8,6 +8,7 @@ from crypto.aes_gcm import aes_gcm_seal_internal
 from crypto.hkdf import hkdf_expand_label
 
 
+@fieldwise_init
 struct HandshakeKeys:
     """Keys derived during the TLS handshake for a specific traffic direction.
     """
@@ -15,16 +16,6 @@ struct HandshakeKeys:
     var key: List[UInt8]
     var iv: List[UInt8]
     var finished_key: List[UInt8]
-
-    fn __init__(
-        out self,
-        var key: List[UInt8],
-        var iv: List[UInt8],
-        var finished_key: List[UInt8],
-    ):
-        self.key = key^
-        self.iv = iv^
-        self.finished_key = finished_key^
 
     fn __moveinit__(out self, deinit other: Self):
         self.key = other.key^
@@ -68,22 +59,13 @@ fn build_nonce(iv: List[UInt8], seq: UInt64) -> List[UInt8]:
     return out^
 
 
+@fieldwise_init
 struct SealedRecord(Movable):
     """Result of a record sealing operation."""
 
     var ciphertext: List[UInt8]
     var tag: List[UInt8]
     var nonce: List[UInt8]
-
-    fn __init__(
-        out self,
-        var ciphertext: List[UInt8],
-        var tag: List[UInt8],
-        var nonce: List[UInt8],
-    ):
-        self.ciphertext = ciphertext^
-        self.tag = tag^
-        self.nonce = nonce^
 
     fn __moveinit__(out self, deinit other: Self):
         self.ciphertext = other.ciphertext^

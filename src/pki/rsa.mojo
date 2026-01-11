@@ -21,15 +21,12 @@ from pki.bigint import (
 )
 
 
+@fieldwise_init
 struct RSAPublicKeyParts:
     """Modulus and exponent of an RSA public key."""
 
     var n: List[UInt64]
     var e: List[UInt64]
-
-    fn __init__(out self, var n: List[UInt64], var e: List[UInt64]):
-        self.n = n^
-        self.e = e^
 
     fn __moveinit__(out self, deinit other: Self):
         self.n = other.n^

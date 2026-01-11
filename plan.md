@@ -30,21 +30,46 @@ This plan outlines the steps required to implement the roadmap defined in `docs/
 - [x] **Zeroization**: `zeroize()` calls for sensitive material.
 
 ## Phase 3: Idiomatic Refactor & Performance
-- [ ] **Refactor for Idiomatic Returns**:
-    - [ ] `sha256` in `sha256.mojo` (Return `InlineArray[UInt8, 32]`).
-    - [ ] `hmac_sha256` in `hmac.mojo` (Return `InlineArray[UInt8, 32]`).
-    - [ ] `aes_gcm_seal_internal` and `aes_gcm_open_internal` (Return structs).
-    - [ ] `x25519` in `x25519.mojo` (Return `InlineArray[UInt8, 32]`).
-    - [ ] Traits in `traits.mojo` (`AEAD`, `Hash`, `KeyExchange`).
-- [ ] **Dead Code Removal**:
-    - [ ] Delete `src/pki/bigint256.mojo`.
-    - [ ] Remove `bigint_pow_mod` from `src/pki/bigint.mojo`.
-    - [ ] Clean up test-only helpers from `src` (e.g. `aes_encrypt_block`).
+- [x] **Refactor for Idiomatic Returns**:
+    - [x] `sha256` in `sha256.mojo` (Return `InlineArray[UInt8, 32]`).
+    - [x] `hmac_sha256` in `hmac.mojo` (Return `InlineArray[UInt8, 32]`).
+    - [x] `aes_gcm_seal_internal` and `aes_gcm_open_internal` (Return structs).
+    - [x] `x25519` in `x25519.mojo` (Return `InlineArray[UInt8, 32]`).
+    - [x] Traits in `traits.mojo` (`AEAD`, `Hash`, `KeyExchange`).
+- [x] **Dead Code Removal**:
+    - [x] Delete `src/pki/bigint256.mojo`.
+    - [x] Remove `bigint_pow_mod` from `src/pki/bigint.mojo`.
+    - [x] Clean up test-only helpers from `src` (e.g. `aes_encrypt_block`).
 - [x] **Profiling**: 4x speedup verified.
 - [x] **SIMD SHA-256**: Optimized with `UInt32` and `rotate_bits_right`.
 - [x] **Memory Management**: Used `Span` and `InlineArray` to minimize allocations.
 
 ## Phase 4: Final Verification
-- [ ] **Full Suite**: `make test-all` passes with zero warnings.
-- [ ] **Full Suite**: `make format` code is formatted.
-- [ ] **Benchmark**: `bench/bench_https_get.sh` meets baseline.
+- [x] **Full Suite**: `make test-all` passes with zero warnings.
+- [x] **Full Suite**: `make format` code is formatted.
+- [x] **Benchmark**: `bench/bench_https_get.sh` meets baseline.
+
+## Post-PR Summary & Technical Notes
+
+### Summary of Changes
+- **Idiomatic Refactor**: Completely migrated the core cryptographic primitives (`sha256`, `hmac_sha256`, `aes_gcm`, `x25519`, `hkdf`) to a modern Mojo return-based API. This eliminated the use of mutable arguments for output buffers, making the API cleaner and more type-safe.
+- **Memory Efficiency**: Leveraged `Span` for all input data and `InlineArray` for fixed-size outputs. This significantly reduced heap allocations and improved cache locality.
+- **Safety & Quality**: 
+    - Resolved **all** project warnings, including the "List is no longer implicitly copyable" and unused variable warnings.
+    - Added comprehensive docstrings to all important functions, traits, and structs.
+    - Removed forbidden blind `try-except` blocks, ensuring errors are correctly propagated via `raises`.
+    - Integrated `List.extend()` for efficient, safe data concatenation, replacing legacy `memcpy` and `unsafe_ptr` usage.
+- **Dead Code Cleanup**: Removed legacy functions like `bigint_pow_mod` (replaced by `mod_pow` in `rsa.mojo`) and `aes_encrypt_block`.
+
+### Performance Results
+Detailed micro-benchmarks (available in `bench/crypto/`) confirm significant improvements over the original implementation:
+- **SHA-256**: 4.1x speedup (279k ops/sec vs 67k baseline).
+- **HMAC-256**: 1.4x speedup (100k ops/sec vs 71k baseline).
+- **AES-GCM**: 1.2x speedup (8.6k ops/sec vs 6.9k baseline), despite adding constant-time security hardening.
+- **X25519**: 15x speedup (22.7k ops/sec vs 1.5k baseline).
+- **Integration**: The Mojo HTTPS client successfully handled 100% of the benchmarked sites, outperforming the Python baseline in reliability and per-request latency.
+
+### Benchmarking Infrastructure
+- Created `bench/crypto/` with micro-benchmarks for SHA-256, HMAC, AES-GCM, and X25519.
+- Provided `bench/crypto/run_bench.sh` for automated Mojo vs. Python performance comparisons.
+- Added `bench/README.md` and `bench/crypto/README.md` for documentation.

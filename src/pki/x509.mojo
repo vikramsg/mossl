@@ -43,14 +43,14 @@ struct ParsedCertificate(Movable):
         )
 
 
-fn to_string(b: List[UInt8]) -> String:
+fn _to_string(b: List[UInt8]) -> String:
     var s = String("")
     for i in range(len(b)):
         s += chr(Int(b[i]))
     return s
 
 
-fn to_hex(b: List[UInt8]) -> String:
+fn _to_hex(b: List[UInt8]) -> String:
     var s = String("")
     var chars = String("0123456789abcdef")
     for i in range(len(b)):
@@ -60,7 +60,7 @@ fn to_hex(b: List[UInt8]) -> String:
     return s
 
 
-fn oid_equal(a: List[UInt8], b: List[UInt8]) -> Bool:
+fn _oid_equal(a: List[UInt8], b: List[UInt8]) -> Bool:
     if len(a) != len(b):
         return False
     var i = 0
@@ -71,7 +71,7 @@ fn oid_equal(a: List[UInt8], b: List[UInt8]) -> Bool:
     return True
 
 
-fn bytes_equal(a: List[UInt8], b: List[UInt8]) -> Bool:
+fn _bytes_equal(a: List[UInt8], b: List[UInt8]) -> Bool:
     if len(a) != len(b):
         return False
     var i = 0
@@ -82,7 +82,7 @@ fn bytes_equal(a: List[UInt8], b: List[UInt8]) -> Bool:
     return True
 
 
-fn read_algorithm_oid(mut reader: DerReader) raises -> List[UInt8]:
+fn _read_algorithm_oid(mut reader: DerReader) raises -> List[UInt8]:
     var seq = read_sequence_reader(reader)
     var oid = read_oid_bytes(seq)
     # Skip optional parameters if present.
@@ -91,7 +91,7 @@ fn read_algorithm_oid(mut reader: DerReader) raises -> List[UInt8]:
     return oid.copy()
 
 
-fn parse_name(mut reader: DerReader) raises -> List[UInt8]:
+fn _parse_name(mut reader: DerReader) raises -> List[UInt8]:
     var name_seq = read_sequence_reader(reader)
     var cn = List[UInt8]()
     while name_seq.remaining() > 0:
@@ -111,19 +111,19 @@ fn parse_name(mut reader: DerReader) raises -> List[UInt8]:
         oid_cn.append(UInt8(0x55))
         oid_cn.append(UInt8(0x04))
         oid_cn.append(UInt8(0x03))
-        if oid_equal(oid, oid_cn):
+        if _oid_equal(oid, oid_cn):
             cn = value_bytes.copy()
     return cn.copy()
 
 
-fn parse_subject_public_key_info(mut reader: DerReader) raises -> List[UInt8]:
+fn _parse_subject_public_key_info(mut reader: DerReader) raises -> List[UInt8]:
     var spki = read_sequence_reader(reader)
-    _ = read_algorithm_oid(spki)
+    _ = _read_algorithm_oid(spki)
     var key_bits = read_bit_string(spki)
     return key_bits.copy()
 
 
-fn parse_subject_alt_name(ext_value: List[UInt8]) -> List[List[UInt8]]:
+fn _parse_subject_alt_name(ext_value: List[UInt8]) -> List[List[UInt8]]:
     var out = List[List[UInt8]]()
     try:
         var reader = DerReader(ext_value)
@@ -141,7 +141,7 @@ fn parse_subject_alt_name(ext_value: List[UInt8]) -> List[List[UInt8]]:
     return out.copy()
 
 
-fn parse_extensions(mut reader: DerReader) raises -> List[List[UInt8]]:
+fn _parse_extensions(mut reader: DerReader) raises -> List[List[UInt8]]:
     var sans = List[List[UInt8]]()
     var ctx = reader.read_tlv()
     if ctx.tag != UInt8(0xA3):
@@ -160,8 +160,8 @@ fn parse_extensions(mut reader: DerReader) raises -> List[List[UInt8]]:
         if ext.remaining() > 0 and ext.peek_tag() == UInt8(0x01):
             _ = ext.read_tlv()  # critical
         var value = read_octet_string(ext)
-        if oid_equal(oid, oid_san):
-            sans = parse_subject_alt_name(value)
+        if _oid_equal(oid, oid_san):
+            sans = _parse_subject_alt_name(value)
     return sans.copy()
 
 
@@ -199,23 +199,51 @@ fn parse_certificate(cert_der: List[UInt8]) raises -> ParsedCertificate:
         _ = tbs_reader.read_tlv()
 
     _ = read_integer_bytes(tbs_reader)
-    _ = read_algorithm_oid(tbs_reader)
-    out.issuer_cn = parse_name(tbs_reader)
+    _ = _read_algorithm_oid(tbs_reader)
+    out.issuer_cn = _parse_name(tbs_reader)
 
     _ = read_sequence_reader(tbs_reader)  # validity
-    out.subject_cn = parse_name(tbs_reader)
-    out.public_key = parse_subject_public_key_info(tbs_reader)
+    out.subject_cn = _parse_name(tbs_reader)
+    out.public_key = _parse_subject_public_key_info(tbs_reader)
 
     if tbs_reader.remaining() > 0 and tbs_reader.peek_tag() == UInt8(0xA3):
-        out.san_dns = parse_extensions(tbs_reader)
+        out.san_dns = _parse_extensions(tbs_reader)
 
-    out.signature_oid = read_algorithm_oid(seq_reader)
+    out.signature_oid = _read_algorithm_oid(seq_reader)
     out.signature = read_bit_string(seq_reader)
 
     return out.copy()
 
 
+fn to_string(b: List[UInt8]) -> String:
+    """Converts a byte list to a string (Public API)."""
+    return _to_string(b)
+
+
+fn to_hex(b: List[UInt8]) -> String:
+    """Converts a byte list to a hex string (Public API)."""
+    return _to_hex(b)
+
+
 fn hostname_matches(cert: ParsedCertificate, hostname: List[UInt8]) -> Bool:
+    """Checks if a hostname matches a certificate (Public API)."""
+    return _hostname_matches(cert, hostname)
+
+
+fn verify_certificate_signature(cert: ParsedCertificate) raises -> Bool:
+    """Verifies a certificate's self-signature (Public API)."""
+    return _verify_certificate_signature(cert)
+
+
+fn verify_signature_with_issuer(
+    cert: ParsedCertificate, issuer_pubkey: List[UInt8]
+) raises -> Bool:
+    """Verifies a certificate signature using an issuer's public key (Public API).
+    """
+    return _verify_signature_with_issuer(cert, issuer_pubkey)
+
+
+fn _hostname_matches(cert: ParsedCertificate, hostname: List[UInt8]) -> Bool:
     for san in cert.san_dns:
         if len(san) >= 2 and san[0] == UInt8(0x2A) and san[1] == UInt8(0x2E):
             # wildcard match: *.example.com
@@ -305,7 +333,7 @@ fn load_system_trust_store() -> TrustStore:
     return trust.copy()
 
 
-fn verify_certificate_signature(cert: ParsedCertificate) raises -> Bool:
+fn _verify_certificate_signature(cert: ParsedCertificate) raises -> Bool:
     var oid_ecdsa_sha256 = List[UInt8]()
     oid_ecdsa_sha256.append(UInt8(0x2A))
     oid_ecdsa_sha256.append(UInt8(0x86))
@@ -347,20 +375,20 @@ fn verify_certificate_signature(cert: ParsedCertificate) raises -> Bool:
     oid_rsa_sha384.append(UInt8(0x01))
     oid_rsa_sha384.append(UInt8(0x0C))
 
-    if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
+    if _oid_equal(cert.signature_oid, oid_ecdsa_sha256):
         return verify_ecdsa_p256(cert.public_key, cert.tbs, cert.signature)
-    if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
+    if _oid_equal(cert.signature_oid, oid_ecdsa_sha384):
         return verify_ecdsa_p384_hash(
             cert.public_key, sha384_bytes(cert.tbs), cert.signature
         )
-    if oid_equal(cert.signature_oid, oid_rsa_sha256):
+    if _oid_equal(cert.signature_oid, oid_rsa_sha256):
         return verify_rsa_pkcs1v15(cert.public_key, cert.tbs, cert.signature)
-    if oid_equal(cert.signature_oid, oid_rsa_sha384):
+    if _oid_equal(cert.signature_oid, oid_rsa_sha384):
         return verify_rsa_pkcs1v15(cert.public_key, cert.tbs, cert.signature)
     return False
 
 
-fn verify_signature_with_issuer(
+fn _verify_signature_with_issuer(
     cert: ParsedCertificate, issuer_pubkey: List[UInt8]
 ) raises -> Bool:
     var oid_ecdsa_sha256 = List[UInt8]()
@@ -404,22 +432,22 @@ fn verify_signature_with_issuer(
     oid_rsa_sha384.append(UInt8(0x01))
     oid_rsa_sha384.append(UInt8(0x0C))
 
-    if oid_equal(cert.signature_oid, oid_ecdsa_sha256):
+    if _oid_equal(cert.signature_oid, oid_ecdsa_sha256):
         return verify_ecdsa_p256(issuer_pubkey, cert.tbs, cert.signature)
-    if oid_equal(cert.signature_oid, oid_ecdsa_sha384):
+    if _oid_equal(cert.signature_oid, oid_ecdsa_sha384):
         var h = sha384_bytes(cert.tbs)
         var ok = verify_ecdsa_p384_hash(issuer_pubkey, h, cert.signature)
         if not ok:
             print(
                 "  ECDSA-SHA384 verification failed for "
-                + to_string(cert.subject_cn)
+                + _to_string(cert.subject_cn)
             )
             print("  Issuer key len: " + String(len(issuer_pubkey)))
             print("  Signature len: " + String(len(cert.signature)))
         return ok
-    if oid_equal(cert.signature_oid, oid_rsa_sha256):
+    if _oid_equal(cert.signature_oid, oid_rsa_sha256):
         return verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
-    if oid_equal(cert.signature_oid, oid_rsa_sha384):
+    if _oid_equal(cert.signature_oid, oid_rsa_sha384):
         return verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)
     return False
 
@@ -433,7 +461,7 @@ fn verify_chain(
     var leaf = parse_certificate(leaf_der)
     if len(leaf.tbs) == 0:
         return False
-    if not hostname_matches(leaf, hostname):
+    if not _hostname_matches(leaf, hostname):
         return False
 
     var current_cert = leaf.copy()
@@ -445,8 +473,8 @@ fn verify_chain(
             var root = parse_certificate(trust.roots[i])
             if len(root.tbs) == 0:
                 continue
-            if bytes_equal(current_cert.issuer_cn, root.subject_cn):
-                if verify_signature_with_issuer(current_cert, root.public_key):
+            if _bytes_equal(current_cert.issuer_cn, root.subject_cn):
+                if _verify_signature_with_issuer(current_cert, root.public_key):
                     return True
 
         # If not, check if signed by next intermediate in the provided list
@@ -455,8 +483,10 @@ fn verify_chain(
             break
 
         var next_cert = parse_certificate(certs[cert_idx])
-        if bytes_equal(current_cert.issuer_cn, next_cert.subject_cn):
-            if verify_signature_with_issuer(current_cert, next_cert.public_key):
+        if _bytes_equal(current_cert.issuer_cn, next_cert.subject_cn):
+            if _verify_signature_with_issuer(
+                current_cert, next_cert.public_key
+            ):
                 current_cert = next_cert.copy()
             else:
                 return False

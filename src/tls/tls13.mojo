@@ -152,30 +152,24 @@ struct TLS13Keys(Copyable):
         self.server_app_iv = other.server_app_iv
 
 
+@fieldwise_init
 struct TLSRecord(Movable):
     """A raw TLS record."""
 
     var content_type: UInt8
     var payload: List[UInt8]
 
-    fn __init__(out self, content_type: UInt8, var payload: List[UInt8]):
-        self.content_type = content_type
-        self.payload = payload^
-
     fn __moveinit__(out self, deinit other: Self):
         self.content_type = other.content_type
         self.payload = other.payload^
 
 
+@fieldwise_init
 struct DecryptedRecord(Movable):
     """A decrypted TLS record's inner content."""
 
     var content: List[UInt8]
     var inner_type: UInt8
-
-    fn __init__(out self, var content: List[UInt8], inner_type: UInt8):
-        self.content = content^
-        self.inner_type = inner_type
 
     fn __moveinit__(out self, deinit other: Self):
         self.content = other.content^
@@ -183,23 +177,40 @@ struct DecryptedRecord(Movable):
 
 
 fn u16_to_bytes(v: UInt16) -> InlineArray[UInt8, 2]:
+    """Converts a 16-bit unsigned integer to big-endian bytes (Public API)."""
+    return _u16_to_bytes(v)
+
+
+fn _u16_to_bytes(v: UInt16) -> InlineArray[UInt8, 2]:
     """Converts a 16-bit unsigned integer to big-endian bytes."""
     return InlineArray[UInt8, 2](UInt8(v >> 8), UInt8(v & 0xFF))
 
 
-fn u24_to_bytes(v: Int) -> InlineArray[UInt8, 3]:
+fn random_bytes(n: Int) raises -> List[UInt8]:
+    """Generates n random bytes using OS source (Public API)."""
+    return _random_bytes(n)
+
+
+fn make_client_hello(
+    host: String, client_random: List[UInt8], client_pub: List[UInt8]
+) -> List[UInt8]:
+    """Constructs a basic TLS 1.3 ClientHello message (Public API)."""
+    return _make_client_hello(host, client_random, client_pub)
+
+
+fn _u24_to_bytes(v: Int) -> InlineArray[UInt8, 3]:
     """Converts a 24-bit integer to big-endian bytes."""
     return InlineArray[UInt8, 3](
         UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)
     )
 
 
-fn bytes_to_u16(b: List[UInt8], idx: Int) -> UInt16:
+fn _bytes_to_u16(b: List[UInt8], idx: Int) -> UInt16:
     """Reads a 16-bit big-endian unsigned integer from a byte buffer."""
     return (UInt16(b[idx]) << 8) | UInt16(b[idx + 1])
 
 
-fn string_to_bytes(s: String) -> List[UInt8]:
+fn _string_to_bytes(s: String) -> List[UInt8]:
     """Converts a string to a byte list."""
     var out = List[UInt8](capacity=len(s))
     for b in s.as_bytes():
@@ -207,11 +218,11 @@ fn string_to_bytes(s: String) -> List[UInt8]:
     return out^
 
 
-fn wrap_handshake(msg_type: UInt8, body: List[UInt8]) -> List[UInt8]:
+fn _wrap_handshake(msg_type: UInt8, body: List[UInt8]) -> List[UInt8]:
     """Wraps a handshake message with type and length header."""
     var out = List[UInt8](capacity=4 + len(body))
     out.append(msg_type)
-    var lb = u24_to_bytes(len(body))
+    var lb = _u24_to_bytes(len(body))
     out.append(lb[0])
     out.append(lb[1])
     out.append(lb[2])
@@ -220,13 +231,13 @@ fn wrap_handshake(msg_type: UInt8, body: List[UInt8]) -> List[UInt8]:
     return out^
 
 
-fn random_bytes(n: Int) raises -> List[UInt8]:
+fn _random_bytes(n: Int) raises -> List[UInt8]:
     """Reads secure random bytes from /dev/urandom."""
     with open("/dev/urandom", "r") as f:
         return f.read_bytes(n)
 
 
-fn read_exact[
+fn _read_exact[
     T: TLSTransport
 ](mut transport: T, size: Int) raises -> List[UInt8]:
     """Reads exactly N bytes from the transport."""
@@ -241,16 +252,16 @@ fn read_exact[
     return out^
 
 
-fn hkdf_expand_label[
+fn _tls13_hkdf_expand_label[
     target_len: Int
 ](
     secret: Span[UInt8], label: String, context: Span[UInt8]
 ) raises -> InlineArray[UInt8, target_len]:
     """Performs HKDF-Expand-Label as defined in TLS 1.3."""
     var full_label = "tls13 " + label
-    var label_bytes = string_to_bytes(full_label)
+    var label_bytes = _string_to_bytes(full_label)
     var info = List[UInt8](capacity=2 + 1 + len(label_bytes) + 1 + len(context))
-    var len_bytes = u16_to_bytes(UInt16(target_len))
+    var len_bytes = _u16_to_bytes(UInt16(target_len))
     info.append(len_bytes[0])
     info.append(len_bytes[1])
     info.append(UInt8(len(label_bytes)))
@@ -267,35 +278,39 @@ fn hkdf_expand_label[
     return out
 
 
-# Shim for List-based output
 fn hkdf_expand_label(
     secret: List[UInt8], label: String, context: List[UInt8], length: Int
-) -> List[UInt8]:
-    """HKDF-Expand-Label shim for compatibility with List-based APIs."""
-    try:
-        if length == 16:
-            var res = hkdf_expand_label[16](Span(secret), label, Span(context))
-            var out = List[UInt8](capacity=16)
-            for i in range(16):
-                out.append(res[i])
-            return out^
-        elif length == 12:
-            var res = hkdf_expand_label[12](Span(secret), label, Span(context))
-            var out = List[UInt8](capacity=12)
-            for i in range(12):
-                out.append(res[i])
-            return out^
-        else:
-            var res = hkdf_expand_label[32](Span(secret), label, Span(context))
-            var out = List[UInt8](capacity=32)
-            for i in range(32):
-                out.append(res[i])
-            return out^
-    except:
-        return List[UInt8]()
+) raises -> List[UInt8]:
+    """Public wrapper for HKDF-Expand-Label returning List[UInt8]."""
+    if length == 16:
+        var res = _tls13_hkdf_expand_label[16](
+            Span(secret), label, Span(context)
+        )
+        var out = List[UInt8](capacity=16)
+        for i in range(16):
+            out.append(res[i])
+        return out^
+    elif length == 12:
+        var res = _tls13_hkdf_expand_label[12](
+            Span(secret), label, Span(context)
+        )
+        var out = List[UInt8](capacity=12)
+        for i in range(12):
+            out.append(res[i])
+        return out^
+    elif length == 32:
+        var res = _tls13_hkdf_expand_label[32](
+            Span(secret), label, Span(context)
+        )
+        var out = List[UInt8](capacity=32)
+        for i in range(32):
+            out.append(res[i])
+        return out^
+    else:
+        raise Error("Unsupported length for hkdf_expand_label")
 
 
-fn xor_iv(iv: InlineArray[UInt8, 12], seq: UInt64) -> InlineArray[UInt8, 12]:
+fn _xor_iv(iv: InlineArray[UInt8, 12], seq: UInt64) -> InlineArray[UInt8, 12]:
     """XORs a sequence number into a TLS IV for GCM nonce construction.
 
     Args:
@@ -311,7 +326,7 @@ fn xor_iv(iv: InlineArray[UInt8, 12], seq: UInt64) -> InlineArray[UInt8, 12]:
     return out
 
 
-fn build_record_aad(length: Int) -> List[UInt8]:
+fn _build_record_aad(length: Int) -> List[UInt8]:
     """Constructs the AAD for a TLS 1.3 encrypted record.
 
     Args:
@@ -324,13 +339,13 @@ fn build_record_aad(length: Int) -> List[UInt8]:
     aad.append(0x17)
     aad.append(0x03)
     aad.append(0x03)
-    var lb = u16_to_bytes(UInt16(length))
+    var lb = _u16_to_bytes(UInt16(length))
     aad.append(lb[0])
     aad.append(lb[1])
     return aad^
 
 
-fn make_client_hello(
+fn _make_client_hello(
     host: String, client_random: List[UInt8], client_pub: List[UInt8]
 ) -> List[UInt8]:
     """Constructs a basic TLS 1.3 ClientHello message.
@@ -349,7 +364,7 @@ fn make_client_hello(
     for b in client_random:
         body.append(b)
     body.append(UInt8(0))  # session id length
-    var cs = u16_to_bytes(CIPHER_TLS_AES_128_GCM_SHA256)
+    var cs = _u16_to_bytes(CIPHER_TLS_AES_128_GCM_SHA256)
     body.append(0)
     body.append(2)
     body.append(cs[0])
@@ -359,22 +374,22 @@ fn make_client_hello(
 
     var ext = List[UInt8]()
     # SNI
-    var host_bytes = string_to_bytes(host)
+    var host_bytes = _string_to_bytes(host)
     var sni_data = List[UInt8]()
     sni_data.append(0)
-    var hlen = u16_to_bytes(UInt16(len(host_bytes)))
+    var hlen = _u16_to_bytes(UInt16(len(host_bytes)))
     sni_data.append(hlen[0])
     sni_data.append(hlen[1])
     for b in host_bytes:
         sni_data.append(b)
-    var sni_list_len = u16_to_bytes(UInt16(len(sni_data)))
+    var sni_list_len = _u16_to_bytes(UInt16(len(sni_data)))
     var sni_ext_data = List[UInt8]()
     sni_ext_data.append(sni_list_len[0])
     sni_ext_data.append(sni_list_len[1])
     for b in sni_data:
         sni_ext_data.append(b)
-    var sni_type = u16_to_bytes(EXT_SNI)
-    var sni_len_bytes = u16_to_bytes(UInt16(len(sni_ext_data)))
+    var sni_type = _u16_to_bytes(EXT_SNI)
+    var sni_len_bytes = _u16_to_bytes(UInt16(len(sni_ext_data)))
     ext.append(sni_type[0])
     ext.append(sni_type[1])
     ext.append(sni_len_bytes[0])
@@ -383,7 +398,7 @@ fn make_client_hello(
         ext.append(b)
 
     # supported_versions
-    var ver_type = u16_to_bytes(EXT_SUPPORTED_VERSIONS)
+    var ver_type = _u16_to_bytes(EXT_SUPPORTED_VERSIONS)
     ext.append(ver_type[0])
     ext.append(ver_type[1])
     ext.append(0)
@@ -393,25 +408,25 @@ fn make_client_hello(
     ext.append(0x04)
 
     # supported_groups
-    var groups_type = u16_to_bytes(EXT_SUPPORTED_GROUPS)
+    var groups_type = _u16_to_bytes(EXT_SUPPORTED_GROUPS)
     ext.append(groups_type[0])
     ext.append(groups_type[1])
     ext.append(0)
     ext.append(4)
     ext.append(0)
     ext.append(2)
-    var g1d = u16_to_bytes(GROUP_X25519)
+    var g1d = _u16_to_bytes(GROUP_X25519)
     ext.append(g1d[0])
     ext.append(g1d[1])
 
     # signature_algorithms
-    var sig_type = u16_to_bytes(EXT_SIG_ALGS)
+    var sig_type = _u16_to_bytes(EXT_SIG_ALGS)
     var sigs = List[UInt8]()
-    var s1 = u16_to_bytes(SIG_ECDSA_SECP256R1_SHA256)
-    var s2 = u16_to_bytes(SIG_ECDSA_SECP384R1_SHA384)
-    var s3 = u16_to_bytes(SIG_RSA_PSS_RSAE_SHA256)
-    var s4 = u16_to_bytes(SIG_RSA_PKCS1_SHA256)
-    var s5 = u16_to_bytes(SIG_RSA_PKCS1_SHA384)
+    var s1 = _u16_to_bytes(SIG_ECDSA_SECP256R1_SHA256)
+    var s2 = _u16_to_bytes(SIG_ECDSA_SECP384R1_SHA384)
+    var s3 = _u16_to_bytes(SIG_RSA_PSS_RSAE_SHA256)
+    var s4 = _u16_to_bytes(SIG_RSA_PKCS1_SHA256)
+    var s5 = _u16_to_bytes(SIG_RSA_PKCS1_SHA384)
     sigs.append(s1[0])
     sigs.append(s1[1])
     sigs.append(s2[0])
@@ -422,10 +437,10 @@ fn make_client_hello(
     sigs.append(s4[1])
     sigs.append(s5[0])
     sigs.append(s5[1])
-    var sig_list_len = u16_to_bytes(UInt16(len(sigs)))
+    var sig_list_len = _u16_to_bytes(UInt16(len(sigs)))
     ext.append(sig_type[0])
     ext.append(sig_type[1])
-    var sig_ext_len = u16_to_bytes(UInt16(len(sigs) + 2))
+    var sig_ext_len = _u16_to_bytes(UInt16(len(sigs) + 2))
     ext.append(sig_ext_len[0])
     ext.append(sig_ext_len[1])
     ext.append(sig_list_len[0])
@@ -434,20 +449,20 @@ fn make_client_hello(
         ext.append(b)
 
     # key_share
-    var ks_type = u16_to_bytes(EXT_KEY_SHARE)
+    var ks_type = _u16_to_bytes(EXT_KEY_SHARE)
     var ks_data = List[UInt8]()
-    var kg = u16_to_bytes(GROUP_X25519)
+    var kg = _u16_to_bytes(GROUP_X25519)
     ks_data.append(kg[0])
     ks_data.append(kg[1])
-    var kpub_len = u16_to_bytes(UInt16(len(client_pub)))
+    var kpub_len = _u16_to_bytes(UInt16(len(client_pub)))
     ks_data.append(kpub_len[0])
     ks_data.append(kpub_len[1])
     for b in client_pub:
         ks_data.append(b)
-    var ks_list_len = u16_to_bytes(UInt16(len(ks_data)))
+    var ks_list_len = _u16_to_bytes(UInt16(len(ks_data)))
     ext.append(ks_type[0])
     ext.append(ks_type[1])
-    var ks_ext_len = u16_to_bytes(UInt16(len(ks_data) + 2))
+    var ks_ext_len = _u16_to_bytes(UInt16(len(ks_data) + 2))
     ext.append(ks_ext_len[0])
     ext.append(ks_ext_len[1])
     ext.append(ks_list_len[0])
@@ -455,7 +470,7 @@ fn make_client_hello(
     for b in ks_data:
         ext.append(b)
 
-    var elen = u16_to_bytes(UInt16(len(ext)))
+    var elen = _u16_to_bytes(UInt16(len(ext)))
     body.append(elen[0])
     body.append(elen[1])
     for b in ext:
@@ -550,8 +565,8 @@ struct TLS13Client[T: TLSTransport](Movable):
         for i in range(len(payload)):
             inner.append(payload[i])
         inner.append(content_type)
-        var aad = build_record_aad(len(inner) + 16)
-        var nonce = xor_iv(iv, seq)
+        var aad = _build_record_aad(len(inner) + 16)
+        var nonce = _xor_iv(iv, seq)
         var sealed = aes_gcm_seal_internal(
             Span(key), Span(nonce), Span(aad), Span(inner)
         )
@@ -567,7 +582,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         record.append(0x17)
         record.append(0x03)
         record.append(0x03)
-        var rlen = u16_to_bytes(UInt16(len(body)))
+        var rlen = _u16_to_bytes(UInt16(len(body)))
         record.append(rlen[0])
         record.append(rlen[1])
         for b in body:
@@ -603,9 +618,9 @@ struct TLS13Client[T: TLSTransport](Movable):
         var tag = InlineArray[UInt8, 16](0)
         for i in range(16):
             tag[i] = payload[len(payload) - 16 + i]
-        var aad = build_record_aad(len(payload))
-        var nonce = xor_iv(iv, seq)
-        
+        var aad = _build_record_aad(len(payload))
+        var nonce = _xor_iv(iv, seq)
+
         var opened = aes_gcm_open_internal(
             Span(key), Span(nonce), Span(aad), Span(ct), tag
         )
@@ -633,9 +648,9 @@ struct TLS13Client[T: TLSTransport](Movable):
         Raises:
             Error: If reading fails.
         """
-        var header = read_exact(self.transport, 5)
-        var length = Int(bytes_to_u16(header, 3))
-        var payload = read_exact(self.transport, length)
+        var header = _read_exact(self.transport, 5)
+        var length = Int(_bytes_to_u16(header, 3))
+        var payload = _read_exact(self.transport, length)
         return TLSRecord(header[0], payload^)
 
     fn send_handshake(mut self, msg: List[UInt8], encrypt: Bool) raises:
@@ -659,25 +674,25 @@ struct TLS13Client[T: TLSTransport](Movable):
             self.hs_seq_out += 1
             from tls.tls13 import bytes_to_bytes
 
-            _ = self.transport.write(Span(bytes_to_bytes(record)))
+            _ = self.transport.write(Span(_bytes_to_bytes(record)))
         else:
             var out = List[UInt8](capacity=5 + len(msg))
             out.append(0x16)
             out.append(0x03)
             out.append(0x03)
-            var lb = u16_to_bytes(UInt16(len(msg)))
+            var lb = _u16_to_bytes(UInt16(len(msg)))
             out.append(lb[0])
             out.append(lb[1])
             for b in msg:
                 out.append(b)
             from tls.tls13 import bytes_to_bytes
 
-            _ = self.transport.write(Span(bytes_to_bytes(out)))
+            _ = self.transport.write(Span(_bytes_to_bytes(out)))
 
     fn perform_handshake(mut self) raises -> Bool:
         """Executes the TLS 1.3 handshake sequence."""
-        var client_random = random_bytes(32)
-        var client_priv = random_bytes(32)
+        var client_random = _random_bytes(32)
+        var client_priv = _random_bytes(32)
         var base_u = List[UInt8]()
         base_u.append(9)
         for _ in range(31):
@@ -687,8 +702,8 @@ struct TLS13Client[T: TLSTransport](Movable):
         for i in range(32):
             client_pub.append(client_pub_arr[i])
 
-        var ch_body = make_client_hello(self.host, client_random, client_pub)
-        var ch_msg = wrap_handshake(HS_CLIENT_HELLO, ch_body)
+        var ch_body = _make_client_hello(self.host, client_random, client_pub)
+        var ch_msg = _wrap_handshake(HS_CLIENT_HELLO, ch_body)
         for b in ch_msg:
             self.transcript.append(b)
         self.send_handshake(ch_msg, False)
@@ -700,7 +715,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         var mt = cursor.read_u8()
         var ml = cursor.read_u24()
         var sh_body = cursor.read_bytes(ml)
-        var sh_msg = wrap_handshake(mt, sh_body)
+        var sh_msg = _wrap_handshake(mt, sh_body)
         for b in sh_msg:
             self.transcript.append(b)
 
@@ -732,35 +747,35 @@ struct TLS13Client[T: TLSTransport](Movable):
         var th_arr = sha256(self.transcript)
 
         var early = hkdf_extract(Span(empty), Span(zeros32))
-        var derived = hkdf_expand_label[32](
+        var derived = _tls13_hkdf_expand_label[32](
             Span(early), "derived", Span(empty_h_arr)
         )
         var handshake_secret = hkdf_extract(Span(derived), Span(shared_arr))
 
         self.handshake_secret = handshake_secret
         self.shared_secret = shared_arr
-        self.keys.client_hs_secret = hkdf_expand_label[32](
+        self.keys.client_hs_secret = _tls13_hkdf_expand_label[32](
             Span(handshake_secret), "c hs traffic", Span(th_arr)
         )
-        self.keys.server_hs_secret = hkdf_expand_label[32](
+        self.keys.server_hs_secret = _tls13_hkdf_expand_label[32](
             Span(handshake_secret), "s hs traffic", Span(th_arr)
         )
-        self.keys.client_hs_key = hkdf_expand_label[16](
+        self.keys.client_hs_key = _tls13_hkdf_expand_label[16](
             Span(self.keys.client_hs_secret), "key", Span(empty)
         )
-        self.keys.server_hs_key = hkdf_expand_label[16](
+        self.keys.server_hs_key = _tls13_hkdf_expand_label[16](
             Span(self.keys.server_hs_secret), "key", Span(empty)
         )
-        self.keys.client_hs_iv = hkdf_expand_label[12](
+        self.keys.client_hs_iv = _tls13_hkdf_expand_label[12](
             Span(self.keys.client_hs_secret), "iv", Span(empty)
         )
-        self.keys.server_hs_iv = hkdf_expand_label[12](
+        self.keys.server_hs_iv = _tls13_hkdf_expand_label[12](
             Span(self.keys.server_hs_secret), "iv", Span(empty)
         )
-        self.keys.client_finished_key = hkdf_expand_label[32](
+        self.keys.client_finished_key = _tls13_hkdf_expand_label[32](
             Span(self.keys.client_hs_secret), "finished", Span(empty)
         )
-        self.keys.server_finished_key = hkdf_expand_label[32](
+        self.keys.server_finished_key = _tls13_hkdf_expand_label[32](
             Span(self.keys.server_hs_secret), "finished", Span(empty)
         )
 
@@ -787,7 +802,7 @@ struct TLS13Client[T: TLSTransport](Movable):
                     if hc.remaining() < hml:
                         break
                     var hbody = hc.read_bytes(hml)
-                    var full = wrap_handshake(hmt, hbody)
+                    var full = _wrap_handshake(hmt, hbody)
                     if hmt == HS_FINISHED:
                         got_finished = True
                     if hmt == HS_CERTIFICATE:
@@ -810,14 +825,14 @@ struct TLS13Client[T: TLSTransport](Movable):
                         break
 
         th_arr = sha256(self.transcript)
-        var derived2 = hkdf_expand_label[32](
+        var derived2 = _tls13_hkdf_expand_label[32](
             Span(handshake_secret), "derived", Span(empty_h_arr)
         )
         var master = hkdf_extract(Span(derived2), Span(zeros32))
-        self.keys.client_app_secret = hkdf_expand_label[32](
+        self.keys.client_app_secret = _tls13_hkdf_expand_label[32](
             Span(master), "c ap traffic", Span(th_arr)
         )
-        self.keys.server_app_secret = hkdf_expand_label[32](
+        self.keys.server_app_secret = _tls13_hkdf_expand_label[32](
             Span(master), "s ap traffic", Span(th_arr)
         )
 
@@ -827,21 +842,21 @@ struct TLS13Client[T: TLSTransport](Movable):
         var fin_body = List[UInt8](capacity=32)
         for i in range(32):
             fin_body.append(finished_arr[i])
-        var fin_msg = wrap_handshake(HS_FINISHED, fin_body)
+        var fin_msg = _wrap_handshake(HS_FINISHED, fin_body)
         self.send_handshake(fin_msg, True)
         for b in fin_msg:
             self.transcript.append(b)
 
-        self.keys.client_app_key = hkdf_expand_label[16](
+        self.keys.client_app_key = _tls13_hkdf_expand_label[16](
             Span(self.keys.client_app_secret), "key", Span(empty)
         )
-        self.keys.server_app_key = hkdf_expand_label[16](
+        self.keys.server_app_key = _tls13_hkdf_expand_label[16](
             Span(self.keys.server_app_secret), "key", Span(empty)
         )
-        self.keys.client_app_iv = hkdf_expand_label[12](
+        self.keys.client_app_iv = _tls13_hkdf_expand_label[12](
             Span(self.keys.client_app_secret), "iv", Span(empty)
         )
-        self.keys.server_app_iv = hkdf_expand_label[12](
+        self.keys.server_app_iv = _tls13_hkdf_expand_label[12](
             Span(self.keys.server_app_secret), "iv", Span(empty)
         )
         self.handshake_done = True
@@ -866,7 +881,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.app_seq_out += 1
         from tls.tls13 import bytes_to_bytes
 
-        _ = self.transport.write(Span(bytes_to_bytes(record)))
+        _ = self.transport.write(Span(_bytes_to_bytes(record)))
 
     fn read_app_data(mut self) raises -> List[UInt8]:
         """Reads and decrypts application data from the transport.
@@ -893,7 +908,7 @@ struct TLS13Client[T: TLSTransport](Movable):
                 return dec.content.copy()
 
 
-fn bytes_to_bytes(list: List[UInt8]) -> Bytes:
+fn _bytes_to_bytes(list: List[UInt8]) -> Bytes:
     """Converts a UInt8 list to a Lightbug Bytes object.
 
     Args:

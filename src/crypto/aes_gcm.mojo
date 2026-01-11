@@ -16,8 +16,8 @@ alias Block16 = SIMD[DType.uint8, 16]
 
 
 @always_inline
-fn sbox() -> InlineArray[UInt8, 256]:
-    """Returns the AES S-Box table."""
+fn _sbox() -> InlineArray[UInt8, 256]:
+    """Returns the AES S-Box."""
     var s = InlineArray[UInt8, 256](0)
     s[0] = 0x63
     s[1] = 0x7C
@@ -279,7 +279,7 @@ fn sbox() -> InlineArray[UInt8, 256]:
 
 
 @always_inline
-fn rcon() -> InlineArray[UInt8, 10]:
+fn _rcon() -> InlineArray[UInt8, 10]:
     """Returns the AES RCON table."""
     return InlineArray[UInt8, 10](
         0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36
@@ -303,7 +303,7 @@ struct AESContextInline(Movable):
         self.round_keys = InlineArray[Block16, 11](fill=Block16(0))
         self.sbox_vecs = InlineArray[Block16, 16](fill=Block16(0))
 
-        var s = sbox()
+        var s = _sbox()
         for i in range(16):
             var v = Block16(0)
             for j in range(16):
@@ -314,8 +314,8 @@ struct AESContextInline(Movable):
 
     fn _expand_key(mut self, key: InlineArray[UInt8, 16]):
         """AES key expansion logic."""
-        var s = sbox()
-        var r = rcon()
+        var s = _sbox()
+        var r = _rcon()
         var temp_keys = InlineArray[UInt8, 176](0)
         for i in range(16):
             temp_keys[i] = key[i]
@@ -460,7 +460,7 @@ struct GHASHContextInline:
 
 
 @always_inline
-fn inc32(ctr_in: InlineArray[UInt8, 16]) -> InlineArray[UInt8, 16]:
+fn _inc32(ctr_in: InlineArray[UInt8, 16]) -> InlineArray[UInt8, 16]:
     """Increments the 32-bit counter part of the AES-GCM IV."""
     var ctr = ctr_in
     var c = (
@@ -476,6 +476,7 @@ fn inc32(ctr_in: InlineArray[UInt8, 16]) -> InlineArray[UInt8, 16]:
     return ctr
 
 
+@fieldwise_init
 struct AESGCMSealed(Movable):
     """Result of an AES-GCM seal operation."""
 
@@ -484,17 +485,12 @@ struct AESGCMSealed(Movable):
     var tag: InlineArray[UInt8, 16]
     """The 16-byte authentication tag."""
 
-    fn __init__(
-        out self, var ciphertext: List[UInt8], tag: InlineArray[UInt8, 16]
-    ):
-        self.ciphertext = ciphertext^
-        self.tag = tag
-
     fn __moveinit__(out self, deinit other: Self):
         self.ciphertext = other.ciphertext^
         self.tag = other.tag
 
 
+@fieldwise_init
 struct AESGCMOpened(Movable):
     """Result of an AES-GCM open operation."""
 
@@ -503,16 +499,30 @@ struct AESGCMOpened(Movable):
     var success: Bool
     """True if authentication succeeded."""
 
-    fn __init__(out self, var plaintext: List[UInt8], success: Bool):
-        self.plaintext = plaintext^
-        self.success = success
-
     fn __moveinit__(out self, deinit other: Self):
         self.plaintext = other.plaintext^
         self.success = other.success
 
 
 fn aes_gcm_seal_internal(
+    key: Span[UInt8], iv: Span[UInt8], aad: Span[UInt8], plaintext: Span[UInt8]
+) raises -> AESGCMSealed:
+    """Internal AES-GCM seal implementation (Public API)."""
+    return _aes_gcm_seal_internal(key, iv, aad, plaintext)
+
+
+fn aes_gcm_open_internal(
+    key: Span[UInt8],
+    iv: Span[UInt8],
+    aad: Span[UInt8],
+    ciphertext: Span[UInt8],
+    tag: InlineArray[UInt8, 16],
+) raises -> AESGCMOpened:
+    """Internal AES-GCM open implementation (Public API)."""
+    return _aes_gcm_open_internal(key, iv, aad, ciphertext, tag)
+
+
+fn _aes_gcm_seal_internal(
     key: Span[UInt8], iv: Span[UInt8], aad: Span[UInt8], plaintext: Span[UInt8]
 ) raises -> AESGCMSealed:
     """Internal AES-GCM seal implementation.
@@ -580,7 +590,7 @@ fn aes_gcm_seal_internal(
     var counter = j0
     idx = 0
     while idx < len(plaintext):
-        counter = inc32(counter)
+        counter = _inc32(counter)
         var ctr_vec = Block16(0)
         for i in range(16):
             ctr_vec[i] = counter[i]
@@ -612,7 +622,7 @@ fn aes_gcm_seal_internal(
     return AESGCMSealed(ciphertext^, tag)
 
 
-fn aes_gcm_open_internal(
+fn _aes_gcm_open_internal(
     key: Span[UInt8],
     iv: Span[UInt8],
     aad: Span[UInt8],
@@ -713,7 +723,7 @@ fn aes_gcm_open_internal(
     var counter = j0
     idx = 0
     while idx < len(ciphertext):
-        counter = inc32(counter)
+        counter = _inc32(counter)
         var ctr_vec = Block16(0)
         for i in range(16):
             ctr_vec[i] = counter[i]
@@ -768,7 +778,7 @@ fn aes_gcm_seal(
 
     """
 
-    return aes_gcm_seal_internal(
+    return _aes_gcm_seal_internal(
         Span(key), Span(iv), Span(aad), Span(plaintext)
     )
 
@@ -820,6 +830,6 @@ fn aes_gcm_open(
     for i in range(min(16, len(tag))):
         tag_arr[i] = tag[i]
 
-    return aes_gcm_open_internal(
+    return _aes_gcm_open_internal(
         Span(key), Span(iv), Span(aad), Span(ciphertext), tag_arr
     )
