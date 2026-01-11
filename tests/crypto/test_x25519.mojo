@@ -1,9 +1,11 @@
 from testing import assert_equal
 
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
-from crypto.x25519 import x25519
 from crypto.bytes import hex_to_bytes, bytes_to_hex
+from crypto.x25519 import x25519
 from memory import Span
+from python import Python
+from logger_utils import default_logger, log_info
 
 
 fn test_x25519_rfc7748_vector1() raises:
@@ -40,6 +42,49 @@ fn test_x25519_rfc7748_vector2() raises:
     )
 
 
+fn test_x25519_wycheproof() raises:
+    var log = default_logger()
+    log_info(log, "Testing X25519 Wycheproof...")
+    var json = Python.import_module("json")
+    var builtins = Python.import_module("builtins")
+
+    var f = builtins.open("tests/fixtures/wycheproof/x25519_test.json", "r")
+    var data = json.load(f)
+    f.close()
+
+    var test_groups = data["testGroups"]
+    for i in range(builtins.len(test_groups)):
+        var group = test_groups[i]
+        var tests = group["tests"]
+        for j in range(builtins.len(tests)):
+            var test = tests[j]
+            var tc_id = String(test["tcId"])
+            var priv = hex_to_bytes(String(test["private"]))
+            var pub = hex_to_bytes(String(test["public"]))
+            var shared = hex_to_bytes(String(test["shared"]))
+            var result = String(test["result"])
+
+            var got_arr = x25519(Span(priv), Span(pub))
+            var got = List[UInt8]()
+            for k in range(32):
+                got.append(got_arr[k])
+            if result == "valid" or result == "acceptable":
+                if bytes_to_hex(got) != bytes_to_hex(shared):
+                    raise Error(
+                        "X25519 Wycheproof FAILURE: shared secret mismatch in "
+                        + tc_id
+                    )
+            elif result == "invalid":
+                if bytes_to_hex(got) == bytes_to_hex(shared):
+                    raise Error(
+                        "X25519 Wycheproof FAILURE: matched invalid test "
+                        + tc_id
+                    )
+
+    log_info(log, "X25519 Wycheproof passed!")
+
+
 fn main() raises:
     test_x25519_rfc7748_vector1()
     test_x25519_rfc7748_vector2()
+    test_x25519_wycheproof()

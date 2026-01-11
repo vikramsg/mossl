@@ -1,6 +1,6 @@
 from collections import List
 
-from logger import Level, Logger
+from logger_utils import default_logger, log_info
 from memory import Span
 from python import Python
 from tests.crypto.diff_utils import assert_equal_bytes
@@ -9,8 +9,8 @@ from crypto.x25519 import x25519
 
 
 fn test_x25519_diff() raises:
-    var log = Logger[Level.INFO]()
-    log.info("Testing X25519 differential with 1000 iterations...")
+    var log = default_logger()
+    log_info(log, "Testing X25519 differential with 1000 iterations...")
     var x25519_py = Python.import_module(
         "cryptography.hazmat.primitives.asymmetric.x25519"
     )
@@ -43,8 +43,8 @@ fn test_x25519_diff() raises:
         )
 
         if i % 100 == 0:
-            log.info("Iteration", i, "passed")
-    log.info("X25519 differential test passed!")
+            log_info(log, "Iteration " + String(i) + " passed")
+    log_info(log, "X25519 differential test passed!")
 
 
 fn main() raises:

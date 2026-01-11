@@ -1,6 +1,6 @@
 from collections import List
 
-from logger import Level, Logger
+from logger_utils import default_logger, log_info
 from memory import Span
 from python import Python
 from tests.crypto.diff_utils import assert_equal_bytes
@@ -9,8 +9,8 @@ from crypto.sha256 import sha256
 
 
 fn test_sha256_diff() raises:
-    var log = Logger[Level.INFO]()
-    log.info("Testing SHA-256 differential with 1000 iterations...")
+    var log = default_logger()
+    log_info(log, "Testing SHA-256 differential with 1000 iterations...")
     var hashlib = Python.import_module("hashlib")
     var os = Python.import_module("os")
     var random = Python.import_module("random")
@@ -33,8 +33,8 @@ fn test_sha256_diff() raises:
         )
 
         if i % 100 == 0:
-            log.info("Iteration", i, "passed")
-    log.info("SHA-256 differential test passed!")
+            log_info(log, "Iteration " + String(i) + " passed")
+    log_info(log, "SHA-256 differential test passed!")
 
 
 fn main() raises:

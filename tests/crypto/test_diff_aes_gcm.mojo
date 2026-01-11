@@ -1,6 +1,6 @@
 from collections import List
 
-from logger import Level, Logger
+from logger_utils import default_logger, log_info
 from memory import Span
 from python import Python
 
@@ -14,8 +14,8 @@ from tests.crypto.diff_utils import (
 
 
 fn test_aes_gcm_diff() raises:
-    var log = Logger[Level.INFO]()
-    log.info("Testing AES-GCM differential with 1000 iterations...")
+    var log = default_logger()
+    log_info(log, "Testing AES-GCM differential with 1000 iterations...")
     var aead = Python.import_module(
         "cryptography.hazmat.primitives.ciphers.aead"
     )
@@ -96,9 +96,9 @@ fn test_aes_gcm_diff() raises:
         )
 
         if i % 100 == 0:
-            log.info("Iteration", i, "passed")
+            log_info(log, "Iteration " + String(i) + " passed")
 
-    log.info("AES-GCM differential test passed!")
+    log_info(log, "AES-GCM differential test passed!")
 
 
 fn main() raises:

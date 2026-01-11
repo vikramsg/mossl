@@ -24,7 +24,12 @@ This directory contains performance benchmarks for the `ssl.mojo` project.
 | **Python** | 6 / 10 | 0.147 | 6.80 |
 | **Mojo** | 10 / 10 | 0.185 | 5.40 |
 
-**Mojo is significantly more robust**, handling 100% of benchmarked sites successfully, while Python failed on 4 sites (Timeouts and HTTP errors). 
+**Mojo is more robust**, handling 100% of benchmarked sites successfully, while Python failed on multiple sites (HTTP errors). 
+
+**Benchmark interpretation (latest run):**
+- Mojo runtime is roughly on par with Python (slightly faster in run-only timing).
+- Total Mojo time is dominated by compile time; compare run-only for request latency.
+- Python failures make its averages optimistic because failed sites are excluded.
 
 ## Main Benchmarks
 

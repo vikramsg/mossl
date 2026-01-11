@@ -1,4 +1,5 @@
 """Local HTTPS client shim that uses TLSSocket without modifying lightbug_http."""
+from collections import List
 import time
 
 from lightbug_http.address import TCPAddr
@@ -267,8 +268,16 @@ struct HTTPSClient:
         while len(payload) > 0 and payload[len(payload) - 1] == byte("\0"):
             _ = payload.pop()
 
+        var payload_bytes = List[Byte](capacity=len(payload))
+        for i in range(len(payload)):
+            payload_bytes.append(payload[i])
+        while len(payload_bytes) > 0 and payload_bytes[
+            len(payload_bytes) - 1
+        ] == Byte(0):
+            _ = payload_bytes.pop()
+
         try:
-            _ = conn.write(payload)
+            _ = conn.write(Span(payload_bytes))
         except e:
             conn.teardown()
             raise e

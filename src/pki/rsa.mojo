@@ -183,6 +183,30 @@ fn mgf1_sha256(seed: List[UInt8], out_len: Int) raises -> List[UInt8]:
     return out^
 
 
+fn mgf1_sha384(seed: List[UInt8], out_len: Int) raises -> List[UInt8]:
+    """MGF1 mask generation function based on SHA-384."""
+    var out = List[UInt8]()
+    var counter = UInt32(0)
+    while len(out) < out_len:
+        var c = List[UInt8]()
+        c.append(UInt8((counter >> 24) & 0xFF))
+        c.append(UInt8((counter >> 16) & 0xFF))
+        c.append(UInt8((counter >> 8) & 0xFF))
+        c.append(UInt8(counter & 0xFF))
+        var data = List[UInt8]()
+        for b in seed:
+            data.append(b)
+        for b in c:
+            data.append(b)
+        var h = sha384_bytes(data)
+        for i in range(48):
+            if len(out) >= out_len:
+                break
+            out.append(h[i])
+        counter += 1
+    return out^
+
+
 fn verify_rsa_pss_sha256(
     pub_key_der: List[UInt8], msg: List[UInt8], sig: List[UInt8]
 ) raises -> Bool:
@@ -243,9 +267,6 @@ fn verify_rsa_pss_sha256(
     if idx >= len(db) or db[idx] != 0x01:
         return False
     idx += 1
-    var salt_len = len(db) - idx
-    if salt_len != h_len:
-        return False
     var salt = List[UInt8]()
     while idx < len(db):
         salt.append(db[idx])
@@ -260,6 +281,86 @@ fn verify_rsa_pss_sha256(
     for b in salt:
         m_prime.append(b)
     var h2 = sha256(m_prime)
+    for j in range(h_len):
+        if h2[j] != h[j]:
+            return False
+    return True
+
+
+fn verify_rsa_pss_sha384(
+    pub_key_der: List[UInt8], msg: List[UInt8], sig: List[UInt8]
+) raises -> Bool:
+    """Verifies an RSA PSS signature with SHA-384."""
+    var parts = parse_rsa_pub_key_parts(pub_key_der)
+    var n_limbs = parts.n.copy()
+    var e_limbs = parts.e.copy()
+
+    var n_obj = BigInt(n_limbs.copy())
+    var mod_bits = n_obj.bit_length()
+    if mod_bits <= 1:
+        return False
+    var em_bits = mod_bits - 1
+    var em_len = (em_bits + 7) // 8
+    if len(sig) != em_len:
+        return False
+
+    var s = bytes_to_bigint(sig)
+    var m_limbs = mod_pow(s, e_limbs, n_limbs)
+    var em = BigInt(m_limbs).to_be_bytes(em_len)
+    if len(em) != em_len:
+        return False
+    if em[em_len - 1] != 0xBC:
+        return False
+
+    var h_len = 48
+    if em_len < h_len + 2:
+        return False
+
+    var masked_db_len = em_len - h_len - 1
+    var masked_db = List[UInt8]()
+    var i = 0
+    while i < masked_db_len:
+        masked_db.append(em[i])
+        i += 1
+    var h = List[UInt8]()
+    while i < em_len - 1:
+        h.append(em[i])
+        i += 1
+
+    var unused_bits = em_len * 8 - em_bits
+    if unused_bits > 0:
+        var mask = UInt8(0xFF) << (8 - unused_bits)
+        if (masked_db[0] & mask) != 0:
+            return False
+
+    var db_mask = mgf1_sha384(h, masked_db_len)
+    var db = List[UInt8]()
+    for j in range(masked_db_len):
+        db.append(masked_db[j] ^ db_mask[j])
+    if unused_bits > 0:
+        var mask2 = UInt8(0xFF) >> unused_bits
+        db[0] = db[0] & mask2
+
+    var idx = 0
+    while idx < len(db) and db[idx] == 0x00:
+        idx += 1
+    if idx >= len(db) or db[idx] != 0x01:
+        return False
+    idx += 1
+    var salt = List[UInt8]()
+    while idx < len(db):
+        salt.append(db[idx])
+        idx += 1
+
+    var m_hash = sha384_bytes(msg)
+    var m_prime = List[UInt8]()
+    for _ in range(8):
+        m_prime.append(0x00)
+    for i in range(48):
+        m_prime.append(m_hash[i])
+    for b in salt:
+        m_prime.append(b)
+    var h2 = sha384_bytes(m_prime)
     for j in range(h_len):
         if h2[j] != h[j]:
             return False

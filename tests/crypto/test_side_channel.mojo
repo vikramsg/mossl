@@ -2,7 +2,7 @@ from collections import List
 from math import sqrt
 from time import perf_counter
 
-from logger import Level, Logger
+from logger_utils import default_logger, log_info, log_warning
 
 from crypto.bytes import constant_time_compare
 
@@ -38,8 +38,10 @@ fn t_test(data1: List[Float64], data2: List[Float64]) -> Float64:
 
 
 fn test_ct_compare_timing() raises:
-    var log = Logger[Level.INFO]()
-    log.info("Running side-channel timing test for constant_time_compare...")
+    var log = default_logger()
+    log_info(
+        log, "Running side-channel timing test for constant_time_compare..."
+    )
     var n = 10000  # More samples for better statistics
     var data_same = List[Float64]()
     var data_diff = List[Float64]()
@@ -71,13 +73,18 @@ fn test_ct_compare_timing() raises:
     if abs_t < 0:
         abs_t = -abs_t
 
-    log.info("T-statistic (same vs diff-at-start):", t_stat)
+    log_info(
+        log,
+        "T-statistic (same vs diff-at-start): " + String(t_stat),
+    )
 
     if abs_t > 10.0:
-        log.warning("Potential timing leak detected in constant_time_compare!")
+        log_warning(
+            log, "Potential timing leak detected in constant_time_compare!"
+        )
     else:
-        log.info(
-            "No significant timing leak detected (within noise threshold)."
+        log_info(
+            log, "No significant timing leak detected (within noise threshold)."
         )
 
 

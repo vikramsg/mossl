@@ -8,7 +8,7 @@ trait TLSTransport(Movable):
     fn read(self, mut buf: Bytes) raises -> Int:
         ...
 
-    fn write(self, buf: Span[Byte]) raises -> Int:
+    fn write(self, buf: Span[UInt8]) raises -> Int:
         ...
 
     fn close(mut self) raises:

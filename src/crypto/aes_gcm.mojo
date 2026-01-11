@@ -1,4 +1,4 @@
-"""Optimized Mojo AES-128 GCM implementation.
+"""Optimized Mojo AES-128/256 GCM implementation.
 Uses InlineArray and SIMD for maximum performance and security.
 """
 
@@ -286,7 +286,17 @@ fn _rcon() -> InlineArray[UInt8, 10]:
     )
 
 
-struct AESContextInline(Movable):
+trait AESBlockCipher(Movable):
+    """Trait for AES block ciphers used by GCM."""
+
+    fn encrypt_block(self, in_vec: Block16) -> Block16:
+        ...
+
+    fn zeroize(mut self):
+        ...
+
+
+struct AESContextInline(AESBlockCipher, Movable):
     """AES-128 Encryption Context with non-allocating SIMD optimization."""
 
     var round_keys: InlineArray[Block16, 11]
@@ -408,6 +418,130 @@ struct AESContextInline(Movable):
             self.round_keys[i] = Block16(0)
 
 
+struct AESContextInline256(AESBlockCipher, Movable):
+    """AES-256 Encryption Context with non-allocating SIMD optimization."""
+
+    var round_keys: InlineArray[Block16, 15]
+    """The expanded round keys."""
+    var sbox_vecs: InlineArray[Block16, 16]
+    """Vectorized S-box for SIMD lookup."""
+
+    fn __init__(out self, key: InlineArray[UInt8, 32]):
+        """Initializes the context from a 32-byte key.
+
+        Args:
+            key: The 256-bit AES key.
+        """
+        self.round_keys = InlineArray[Block16, 15](fill=Block16(0))
+        self.sbox_vecs = InlineArray[Block16, 16](fill=Block16(0))
+
+        var s = _sbox()
+        for i in range(16):
+            var v = Block16(0)
+            for j in range(16):
+                v[j] = s[i * 16 + j]
+            self.sbox_vecs[i] = v
+
+        self._expand_key(key)
+
+    fn _expand_key(mut self, key: InlineArray[UInt8, 32]):
+        """AES-256 key expansion logic."""
+        var s = _sbox()
+        var r = _rcon()
+        var temp_keys = InlineArray[UInt8, 240](0)
+        for i in range(32):
+            temp_keys[i] = key[i]
+        var i = 32
+        var rcon_idx = 0
+        var temp = InlineArray[UInt8, 4](0)
+        while i < 240:
+            for j in range(4):
+                temp[j] = temp_keys[i - 4 + j]
+            if (i % 32) == 0:
+                var t0 = temp[0]
+                temp[0] = s[Int(temp[1])] ^ r[rcon_idx]
+                temp[1] = s[Int(temp[2])]
+                temp[2] = s[Int(temp[3])]
+                temp[3] = s[Int(t0)]
+                rcon_idx += 1
+            elif (i % 32) == 16:
+                for j in range(4):
+                    temp[j] = s[Int(temp[j])]
+            for j in range(4):
+                temp_keys[i] = temp_keys[i - 32] ^ temp[j]
+                i += 1
+        for r_idx in range(15):
+            var vec = Block16(0)
+            for j in range(16):
+                vec[j] = temp_keys[r_idx * 16 + j]
+            self.round_keys[r_idx] = vec
+
+    @always_inline
+    fn _sbox_vec(self, state: Block16) -> Block16:
+        """Vectorized constant-time S-Box lookup."""
+        var out = Block16(0)
+        var high_nibble = state >> 4
+        var low_nibble = state & 0x0F
+        for i in range(16):
+            var chunk_idx = SIMD[DType.uint8, 16](UInt8(i))
+            var mask_bool = high_nibble.eq(chunk_idx)
+            var mask = mask_bool.select(Block16(0xFF), Block16(0x00))
+            var lookups = self.sbox_vecs[i]._dynamic_shuffle(low_nibble)
+            out |= mask & lookups
+        return out
+
+    fn _mix_columns(self, state: Block16) -> Block16:
+        """AES MixColumns vectorized implementation."""
+        var s1 = state.shuffle[
+            1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12
+        ]()
+        var s2 = state.shuffle[
+            2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13
+        ]()
+        var s3 = state.shuffle[
+            3, 0, 1, 2, 7, 4, 5, 6, 11, 8, 9, 10, 15, 12, 13, 14
+        ]()
+        var t = state ^ s1 ^ s2 ^ s3
+        var x_s0s1 = self.xtime_vec(state ^ s1)
+        return state ^ t ^ x_s0s1
+
+    @always_inline
+    fn xtime_vec(self, v: Block16) -> Block16:
+        """Vectorized Galois field multiplication by x."""
+        var high = v >> 7
+        var mask = high * 27
+        return (v << 1) ^ mask
+
+    fn encrypt_block(self, in_vec: Block16) -> Block16:
+        """Encrypts a single 16-byte block.
+
+        Args:
+            in_vec: The 16-byte block to encrypt as a SIMD vector.
+
+        Returns:
+            The encrypted block.
+        """
+        var state = in_vec ^ self.round_keys[0]
+        for r in range(1, 14):
+            state = self._sbox_vec(state)
+            state = state.shuffle[
+                0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11
+            ]()
+            state = self._mix_columns(state)
+            state = state ^ self.round_keys[r]
+        state = self._sbox_vec(state)
+        state = state.shuffle[
+            0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11
+        ]()
+        state = state ^ self.round_keys[14]
+        return state
+
+    fn zeroize(mut self):
+        """Clears sensitive round keys from memory."""
+        for i in range(15):
+            self.round_keys[i] = Block16(0)
+
+
 struct GHASHContextInline:
     """GHASH implementation for GCM authentication."""
 
@@ -522,16 +656,15 @@ fn aes_gcm_open_internal(
     return _aes_gcm_open_internal(key, iv, aad, ciphertext, tag)
 
 
-fn _aes_gcm_seal_internal(
-    key: Span[UInt8], iv: Span[UInt8], aad: Span[UInt8], plaintext: Span[UInt8]
+fn _aes_gcm_seal_internal_ctx[
+    C: AESBlockCipher
+](
+    mut ctx: C,
+    iv: Span[UInt8],
+    aad: Span[UInt8],
+    plaintext: Span[UInt8],
 ) raises -> AESGCMSealed:
-    """Internal AES-GCM seal implementation."""
-    if len(iv) == 0:
-        raise Error("AES-GCM: IV length must be > 0")
-    var key_arr = InlineArray[UInt8, 16](0)
-    for i in range(16):
-        key_arr[i] = key[i]
-    var ctx = AESContextInline(key_arr)
+    """Internal AES-GCM seal implementation for a provided AES context."""
     var h_block = ctx.encrypt_block(Block16(0))
     var h128 = UInt128(0)
     for i in range(16):
@@ -602,20 +735,16 @@ fn _aes_gcm_seal_internal(
     return AESGCMSealed(ciphertext^, tag)
 
 
-fn _aes_gcm_open_internal(
-    key: Span[UInt8],
+fn _aes_gcm_open_internal_ctx[
+    C: AESBlockCipher
+](
+    mut ctx: C,
     iv: Span[UInt8],
     aad: Span[UInt8],
     ciphertext: Span[UInt8],
     tag: InlineArray[UInt8, 16],
 ) raises -> AESGCMOpened:
-    """Internal AES-GCM open implementation."""
-    if len(iv) == 0:
-        return AESGCMOpened(List[UInt8](), False)
-    var key_arr = InlineArray[UInt8, 16](0)
-    for i in range(16):
-        key_arr[i] = key[i]
-    var ctx = AESContextInline(key_arr)
+    """Internal AES-GCM open implementation for a provided AES context."""
     var h_block = ctx.encrypt_block(Block16(0))
     var h128 = UInt128(0)
     for i in range(16):
@@ -701,6 +830,52 @@ fn _aes_gcm_open_internal(
     return AESGCMOpened(plaintext^, True)
 
 
+fn _aes_gcm_seal_internal(
+    key: Span[UInt8], iv: Span[UInt8], aad: Span[UInt8], plaintext: Span[UInt8]
+) raises -> AESGCMSealed:
+    """Internal AES-GCM seal implementation."""
+    if len(iv) == 0:
+        raise Error("AES-GCM: IV length must be > 0")
+    if len(key) == 16:
+        var key_arr = InlineArray[UInt8, 16](0)
+        for i in range(16):
+            key_arr[i] = key[i]
+        var ctx = AESContextInline(key_arr)
+        return _aes_gcm_seal_internal_ctx(ctx, iv, aad, plaintext)
+    if len(key) == 32:
+        var key_arr = InlineArray[UInt8, 32](0)
+        for i in range(32):
+            key_arr[i] = key[i]
+        var ctx = AESContextInline256(key_arr)
+        return _aes_gcm_seal_internal_ctx(ctx, iv, aad, plaintext)
+    raise Error("AES-GCM: Unsupported key length")
+
+
+fn _aes_gcm_open_internal(
+    key: Span[UInt8],
+    iv: Span[UInt8],
+    aad: Span[UInt8],
+    ciphertext: Span[UInt8],
+    tag: InlineArray[UInt8, 16],
+) raises -> AESGCMOpened:
+    """Internal AES-GCM open implementation."""
+    if len(iv) == 0:
+        return AESGCMOpened(List[UInt8](), False)
+    if len(key) == 16:
+        var key_arr = InlineArray[UInt8, 16](0)
+        for i in range(16):
+            key_arr[i] = key[i]
+        var ctx = AESContextInline(key_arr)
+        return _aes_gcm_open_internal_ctx(ctx, iv, aad, ciphertext, tag)
+    if len(key) == 32:
+        var key_arr = InlineArray[UInt8, 32](0)
+        for i in range(32):
+            key_arr[i] = key[i]
+        var ctx = AESContextInline256(key_arr)
+        return _aes_gcm_open_internal_ctx(ctx, iv, aad, ciphertext, tag)
+    return AESGCMOpened(List[UInt8](), False)
+
+
 # Compatibility shims
 
 
@@ -716,7 +891,7 @@ fn aes_gcm_seal(
     Args:
 
 
-        key: The 16-byte AES key.
+        key: The 16-byte or 32-byte AES key.
 
 
         iv: The initialization vector.
@@ -760,7 +935,7 @@ fn aes_gcm_open(
     Args:
 
 
-        key: The 16-byte AES key.
+        key: The 16-byte or 32-byte AES key.
 
 
         iv: The initialization vector.

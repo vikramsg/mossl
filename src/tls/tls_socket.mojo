@@ -17,8 +17,9 @@ struct SocketTransport(Movable, TLSTransport):
     fn read(self, mut buf: Bytes) raises -> Int:
         return Int(self.socket.receive(buf))
 
-    fn write(self, buf: Span[Byte]) raises -> Int:
-        return Int(self.socket.send(buf))
+    fn write(self, buf: Span[UInt8]) raises -> Int:
+        self.socket.send_all(buf, len(buf))
+        return len(buf)
 
     fn close(mut self) raises:
         self.socket.close()
@@ -47,7 +48,7 @@ struct NullTransport(Movable, TLSTransport):
     fn read(self, mut buf: Bytes) raises -> Int:
         return 0
 
-    fn write(self, buf: Span[Byte]) raises -> Int:
+    fn write(self, buf: Span[UInt8]) raises -> Int:
         return len(buf)
 
     fn close(mut self) raises:

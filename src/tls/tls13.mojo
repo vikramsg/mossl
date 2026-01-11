@@ -8,7 +8,6 @@ from lightbug_http.io.bytes import Bytes
 from memory import Span
 from pki.ecdsa_p256 import verify_ecdsa_p256_hash
 from pki.ecdsa_p384 import verify_ecdsa_p384_hash
-from pki.rsa import verify_rsa_pkcs1v15, verify_rsa_pss_sha256
 from pki.trust_store import load_trust_store
 from pki.x509 import parse_certificate, verify_chain
 
@@ -19,6 +18,12 @@ from crypto.hmac import hmac_sha256
 from crypto.sha256 import sha256
 from crypto.x25519 import x25519
 from tls.transport import TLSTransport
+
+from pki.rsa import (
+    verify_rsa_pkcs1v15,
+    verify_rsa_pss_sha256,
+    verify_rsa_pss_sha384,
+)
 
 alias TLS_VERSION = UInt16(0x0303)
 alias TLS13_VERSION = UInt16(0x0304)
@@ -53,6 +58,9 @@ alias SIG_RSA_PKCS1_SHA512 = UInt16(0x0601)
 alias SIG_ECDSA_SECP256R1_SHA256 = UInt16(0x0403)
 alias SIG_ECDSA_SECP384R1_SHA384 = UInt16(0x0503)
 alias SIG_RSA_PSS_RSAE_SHA256 = UInt16(0x0804)
+alias SIG_RSA_PSS_RSAE_SHA384 = UInt16(0x0805)
+alias SIG_RSA_PSS_PSS_SHA256 = UInt16(0x0809)
+alias SIG_RSA_PSS_PSS_SHA384 = UInt16(0x080A)
 
 
 @fieldwise_init
@@ -435,11 +443,14 @@ fn _make_client_hello(
     for b in client_random:
         body.append(b)
     body.append(UInt8(0))  # session id length
-    var cs = _u16_to_bytes(CIPHER_TLS_AES_128_GCM_SHA256)
+    var cs1 = _u16_to_bytes(CIPHER_TLS_AES_128_GCM_SHA256)
+    var cs2 = _u16_to_bytes(CIPHER_TLS_AES_256_GCM_SHA384)
     body.append(0)
-    body.append(2)
-    body.append(cs[0])
-    body.append(cs[1])
+    body.append(4)
+    body.append(cs1[0])
+    body.append(cs1[1])
+    body.append(cs2[0])
+    body.append(cs2[1])
     body.append(UInt8(1))
     body.append(UInt8(0))  # compression
 
@@ -496,6 +507,9 @@ fn _make_client_hello(
     var s1 = _u16_to_bytes(SIG_ECDSA_SECP256R1_SHA256)
     var s2 = _u16_to_bytes(SIG_ECDSA_SECP384R1_SHA384)
     var s3 = _u16_to_bytes(SIG_RSA_PSS_RSAE_SHA256)
+    var s3b = _u16_to_bytes(SIG_RSA_PSS_RSAE_SHA384)
+    var s3c = _u16_to_bytes(SIG_RSA_PSS_PSS_SHA256)
+    var s3d = _u16_to_bytes(SIG_RSA_PSS_PSS_SHA384)
     var s4 = _u16_to_bytes(SIG_RSA_PKCS1_SHA256)
     var s5 = _u16_to_bytes(SIG_RSA_PKCS1_SHA384)
     sigs.append(s1[0])
@@ -504,6 +518,12 @@ fn _make_client_hello(
     sigs.append(s2[1])
     sigs.append(s3[0])
     sigs.append(s3[1])
+    sigs.append(s3b[0])
+    sigs.append(s3b[1])
+    sigs.append(s3c[0])
+    sigs.append(s3c[1])
+    sigs.append(s3d[0])
+    sigs.append(s3d[1])
     sigs.append(s4[0])
     sigs.append(s4[1])
     sigs.append(s5[0])
@@ -559,6 +579,7 @@ struct TLS13Client[T: TLSTransport](Movable):
     var handshake_secret: List[UInt8]
     var shared_secret: InlineArray[UInt8, 32]
     var server_pubkey: List[UInt8]
+    var use_sha384: Bool
     var app_seq_in: UInt64
     var app_seq_out: UInt64
     var hs_seq_in: UInt64
@@ -576,6 +597,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.handshake_secret = List[UInt8]()
         self.shared_secret = InlineArray[UInt8, 32](0)
         self.server_pubkey = List[UInt8]()
+        self.use_sha384 = False
         self.app_seq_in = 0
         self.app_seq_out = 0
         self.hs_seq_in = 0
@@ -593,6 +615,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.handshake_secret = other.handshake_secret^
         self.shared_secret = other.shared_secret
         self.server_pubkey = other.server_pubkey^
+        self.use_sha384 = other.use_sha384
         self.app_seq_in = other.app_seq_in
         self.app_seq_out = other.app_seq_out
         self.hs_seq_in = other.hs_seq_in
@@ -610,6 +633,8 @@ struct TLS13Client[T: TLSTransport](Movable):
         seq: UInt64,
     ) raises -> List[UInt8]:
         """Encrypts a TLS 1.3 record."""
+        # lightbug_http sockets reject buffers ending with a NUL byte.
+        var pad_len = 0
         var inner = List[UInt8](capacity=len(payload) + 1)
         for i in range(len(payload)):
             inner.append(payload[i])
@@ -621,6 +646,18 @@ struct TLS13Client[T: TLSTransport](Movable):
         )
         var ciphertext = sealed.ciphertext.copy()
         var tag = sealed.tag
+        while tag[15] == 0:
+            pad_len += 1
+            if pad_len > 255:
+                raise Error("TLS encrypt: could not avoid null-terminated tag")
+            inner.append(0)
+            aad = _build_record_aad(len(inner) + 16)
+            nonce = _xor_iv(iv, seq)
+            sealed = aes_gcm_seal_internal(
+                key, Span(nonce), Span(aad), Span(inner)
+            )
+            ciphertext = sealed.ciphertext.copy()
+            tag = sealed.tag
 
         var body = List[UInt8](capacity=len(ciphertext) + 16)
         for b in ciphertext:
@@ -739,7 +776,7 @@ struct TLS13Client[T: TLSTransport](Movable):
                 self.hs_seq_out,
             )
             self.hs_seq_out += 1
-            _ = self.transport.write(Span(_bytes_to_bytes(record)))
+            _ = self.transport.write(Span(record))
         else:
             var out = List[UInt8](capacity=5 + len(msg))
             out.append(0x16)
@@ -750,7 +787,7 @@ struct TLS13Client[T: TLSTransport](Movable):
             out.append(lb[1])
             for b in msg:
                 out.append(b)
-            _ = self.transport.write(Span(_bytes_to_bytes(out)))
+            _ = self.transport.write(Span(out))
 
     fn _derive_keys(mut self, handshake_secret: Span[UInt8]) raises:
         """Derives handshake traffic keys."""
@@ -806,6 +843,62 @@ struct TLS13Client[T: TLSTransport](Movable):
         for i in range(32):
             self.keys.server_finished_key.append(s_fin_key[i])
 
+    fn _derive_keys_sha384(mut self, handshake_secret: Span[UInt8]) raises:
+        """Derives handshake traffic keys using SHA-384."""
+        from crypto.sha384 import sha384
+
+        var empty = List[UInt8]()
+        var th_arr = sha384(self.transcript)
+
+        var c_hs_secret = _tls13_hkdf_expand_label_sha384[48](
+            handshake_secret, "c hs traffic", Span(th_arr)
+        )
+        self.keys.client_hs_secret = List[UInt8]()
+        for i in range(48):
+            self.keys.client_hs_secret.append(c_hs_secret[i])
+
+        var s_hs_secret = _tls13_hkdf_expand_label_sha384[48](
+            handshake_secret, "s hs traffic", Span(th_arr)
+        )
+        self.keys.server_hs_secret = List[UInt8]()
+        for i in range(48):
+            self.keys.server_hs_secret.append(s_hs_secret[i])
+
+        var c_hs_key = _tls13_hkdf_expand_label_sha384[32](
+            Span(self.keys.client_hs_secret), "key", Span(empty)
+        )
+        self.keys.client_hs_key = List[UInt8]()
+        for i in range(32):
+            self.keys.client_hs_key.append(c_hs_key[i])
+
+        var s_hs_key = _tls13_hkdf_expand_label_sha384[32](
+            Span(self.keys.server_hs_secret), "key", Span(empty)
+        )
+        self.keys.server_hs_key = List[UInt8]()
+        for i in range(32):
+            self.keys.server_hs_key.append(s_hs_key[i])
+
+        self.keys.client_hs_iv = _tls13_hkdf_expand_label_sha384[12](
+            Span(self.keys.client_hs_secret), "iv", Span(empty)
+        )
+        self.keys.server_hs_iv = _tls13_hkdf_expand_label_sha384[12](
+            Span(self.keys.server_hs_secret), "iv", Span(empty)
+        )
+
+        var c_fin_key = _tls13_hkdf_expand_label_sha384[48](
+            Span(self.keys.client_hs_secret), "finished", Span(empty)
+        )
+        self.keys.client_finished_key = List[UInt8]()
+        for i in range(48):
+            self.keys.client_finished_key.append(c_fin_key[i])
+
+        var s_fin_key = _tls13_hkdf_expand_label_sha384[48](
+            Span(self.keys.server_hs_secret), "finished", Span(empty)
+        )
+        self.keys.server_finished_key = List[UInt8]()
+        for i in range(48):
+            self.keys.server_finished_key.append(s_fin_key[i])
+
     fn _derive_app_keys(mut self, master_secret: Span[UInt8]) raises:
         """Derives application traffic keys."""
         var empty = List[UInt8]()
@@ -846,47 +939,127 @@ struct TLS13Client[T: TLSTransport](Movable):
             Span(self.keys.server_app_secret), "iv", Span(empty)
         )
 
-    fn _update_server_app_keys(mut self) raises:
-        """Updates server application traffic keys after a KeyUpdate."""
+    fn _derive_app_keys_sha384(mut self, master_secret: Span[UInt8]) raises:
+        """Derives application traffic keys using SHA-384."""
+        from crypto.sha384 import sha384
+
         var empty = List[UInt8]()
-        var next_secret = _tls13_hkdf_expand_label[32](
-            Span(self.keys.server_app_secret), "traffic upd", Span(empty)
+        var th_arr = sha384(self.transcript)
+
+        var c_ap_secret = _tls13_hkdf_expand_label_sha384[48](
+            master_secret, "c ap traffic", Span(th_arr)
+        )
+        self.keys.client_app_secret = List[UInt8]()
+        for i in range(48):
+            self.keys.client_app_secret.append(c_ap_secret[i])
+
+        var s_ap_secret = _tls13_hkdf_expand_label_sha384[48](
+            master_secret, "s ap traffic", Span(th_arr)
         )
         self.keys.server_app_secret = List[UInt8]()
-        for i in range(32):
-            self.keys.server_app_secret.append(next_secret[i])
+        for i in range(48):
+            self.keys.server_app_secret.append(s_ap_secret[i])
 
-        var next_key = _tls13_hkdf_expand_label[16](
+        var c_ap_key = _tls13_hkdf_expand_label_sha384[32](
+            Span(self.keys.client_app_secret), "key", Span(empty)
+        )
+        self.keys.client_app_key = List[UInt8]()
+        for i in range(32):
+            self.keys.client_app_key.append(c_ap_key[i])
+
+        var s_ap_key = _tls13_hkdf_expand_label_sha384[32](
             Span(self.keys.server_app_secret), "key", Span(empty)
         )
         self.keys.server_app_key = List[UInt8]()
-        for i in range(16):
-            self.keys.server_app_key.append(next_key[i])
+        for i in range(32):
+            self.keys.server_app_key.append(s_ap_key[i])
 
-        self.keys.server_app_iv = _tls13_hkdf_expand_label[12](
+        self.keys.client_app_iv = _tls13_hkdf_expand_label_sha384[12](
+            Span(self.keys.client_app_secret), "iv", Span(empty)
+        )
+        self.keys.server_app_iv = _tls13_hkdf_expand_label_sha384[12](
             Span(self.keys.server_app_secret), "iv", Span(empty)
         )
+
+    fn _update_server_app_keys(mut self) raises:
+        """Updates server application traffic keys after a KeyUpdate."""
+        var empty = List[UInt8]()
+        if self.use_sha384:
+            var next_secret = _tls13_hkdf_expand_label_sha384[48](
+                Span(self.keys.server_app_secret), "traffic upd", Span(empty)
+            )
+            self.keys.server_app_secret = List[UInt8]()
+            for i in range(48):
+                self.keys.server_app_secret.append(next_secret[i])
+
+            var next_key = _tls13_hkdf_expand_label_sha384[32](
+                Span(self.keys.server_app_secret), "key", Span(empty)
+            )
+            self.keys.server_app_key = List[UInt8]()
+            for i in range(32):
+                self.keys.server_app_key.append(next_key[i])
+
+            self.keys.server_app_iv = _tls13_hkdf_expand_label_sha384[12](
+                Span(self.keys.server_app_secret), "iv", Span(empty)
+            )
+        else:
+            var next_secret = _tls13_hkdf_expand_label[32](
+                Span(self.keys.server_app_secret), "traffic upd", Span(empty)
+            )
+            self.keys.server_app_secret = List[UInt8]()
+            for i in range(32):
+                self.keys.server_app_secret.append(next_secret[i])
+
+            var next_key = _tls13_hkdf_expand_label[16](
+                Span(self.keys.server_app_secret), "key", Span(empty)
+            )
+            self.keys.server_app_key = List[UInt8]()
+            for i in range(16):
+                self.keys.server_app_key.append(next_key[i])
+
+            self.keys.server_app_iv = _tls13_hkdf_expand_label[12](
+                Span(self.keys.server_app_secret), "iv", Span(empty)
+            )
 
     fn _update_client_app_keys(mut self) raises:
         """Updates client application traffic keys after sending a KeyUpdate."""
         var empty = List[UInt8]()
-        var next_secret = _tls13_hkdf_expand_label[32](
-            Span(self.keys.client_app_secret), "traffic upd", Span(empty)
-        )
-        self.keys.client_app_secret = List[UInt8]()
-        for i in range(32):
-            self.keys.client_app_secret.append(next_secret[i])
+        if self.use_sha384:
+            var next_secret = _tls13_hkdf_expand_label_sha384[48](
+                Span(self.keys.client_app_secret), "traffic upd", Span(empty)
+            )
+            self.keys.client_app_secret = List[UInt8]()
+            for i in range(48):
+                self.keys.client_app_secret.append(next_secret[i])
 
-        var next_key = _tls13_hkdf_expand_label[16](
-            Span(self.keys.client_app_secret), "key", Span(empty)
-        )
-        self.keys.client_app_key = List[UInt8]()
-        for i in range(16):
-            self.keys.client_app_key.append(next_key[i])
+            var next_key = _tls13_hkdf_expand_label_sha384[32](
+                Span(self.keys.client_app_secret), "key", Span(empty)
+            )
+            self.keys.client_app_key = List[UInt8]()
+            for i in range(32):
+                self.keys.client_app_key.append(next_key[i])
 
-        self.keys.client_app_iv = _tls13_hkdf_expand_label[12](
-            Span(self.keys.client_app_secret), "iv", Span(empty)
-        )
+            self.keys.client_app_iv = _tls13_hkdf_expand_label_sha384[12](
+                Span(self.keys.client_app_secret), "iv", Span(empty)
+            )
+        else:
+            var next_secret = _tls13_hkdf_expand_label[32](
+                Span(self.keys.client_app_secret), "traffic upd", Span(empty)
+            )
+            self.keys.client_app_secret = List[UInt8]()
+            for i in range(32):
+                self.keys.client_app_secret.append(next_secret[i])
+
+            var next_key = _tls13_hkdf_expand_label[16](
+                Span(self.keys.client_app_secret), "key", Span(empty)
+            )
+            self.keys.client_app_key = List[UInt8]()
+            for i in range(16):
+                self.keys.client_app_key.append(next_key[i])
+
+            self.keys.client_app_iv = _tls13_hkdf_expand_label[12](
+                Span(self.keys.client_app_secret), "iv", Span(empty)
+            )
 
     fn _send_key_update(mut self, request_update: Bool) raises:
         """Sends a KeyUpdate and rotates client traffic keys."""
@@ -907,7 +1080,7 @@ struct TLS13Client[T: TLSTransport](Movable):
             self.app_seq_out,
         )
         self.app_seq_out += 1
-        _ = self.transport.write(Span(_bytes_to_bytes(record)))
+        _ = self.transport.write(Span(record))
         self._update_client_app_keys()
 
     fn perform_handshake(mut self) raises -> Bool:
@@ -942,7 +1115,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         _ = sh.read_u8()
 
         # Determine PRF based on cipher
-        var use_sha384 = cipher == CIPHER_TLS_AES_256_GCM_SHA384
+        self.use_sha384 = cipher == CIPHER_TLS_AES_256_GCM_SHA384
 
         var ext_len = Int(sh.read_u16())
         var ext_cur = ByteCursor(sh.read_bytes(ext_len))
@@ -962,7 +1135,7 @@ struct TLS13Client[T: TLSTransport](Movable):
 
         # Key Schedule Phase 1: Handshake Secret
         var empty = List[UInt8]()
-        if use_sha384:
+        if self.use_sha384:
             from crypto.hkdf import hkdf_extract_sha384
             from crypto.sha384 import sha384
 
@@ -977,7 +1150,8 @@ struct TLS13Client[T: TLSTransport](Movable):
             self.handshake_secret = List[UInt8]()
             for i in range(48):
                 self.handshake_secret.append(hs_secret[i])
-            # TODO: Add _derive_keys_sha384
+            var hs_tmp = self.handshake_secret.copy()
+            self._derive_keys_sha384(Span(hs_tmp))
         else:
             var zeros32 = zeros(32)
             var early = hkdf_extract(Span(empty), Span(zeros32))
@@ -1022,7 +1196,6 @@ struct TLS13Client[T: TLSTransport](Movable):
                 var sig_len = Int(cv_cur.read_u16())
                 var sig = cv_cur.read_bytes(sig_len)
 
-                var th_arr_cv = sha256(self.transcript)
                 var padded = List[UInt8]()
                 for _ in range(64):
                     padded.append(0x20)
@@ -1030,15 +1203,46 @@ struct TLS13Client[T: TLSTransport](Movable):
                 for i in range(len(context_str)):
                     padded.append(ord(context_str[i]))
                 padded.append(0)
-                for i in range(32):
-                    padded.append(th_arr_cv[i])
 
-                if sig_alg == SIG_RSA_PSS_RSAE_SHA256:
+                if self.use_sha384:
+                    from crypto.sha384 import sha384
+
+                    var th_arr_cv = sha384(self.transcript)
+                    for i in range(48):
+                        padded.append(th_arr_cv[i])
+                else:
+                    var th_arr_cv = sha256(self.transcript)
+                    for i in range(32):
+                        padded.append(th_arr_cv[i])
+
+                if (
+                    sig_alg == SIG_RSA_PSS_RSAE_SHA256
+                    or sig_alg == SIG_RSA_PSS_PSS_SHA256
+                ):
                     if not verify_rsa_pss_sha256(
                         self.server_pubkey, padded, sig
                     ):
-                        raise Error("RSA PSS signature failed")
+                        raise Error(
+                            "RSA PSS signature failed (alg="
+                            + hex(sig_alg)
+                            + ")"
+                        )
+                elif (
+                    sig_alg == SIG_RSA_PSS_RSAE_SHA384
+                    or sig_alg == SIG_RSA_PSS_PSS_SHA384
+                ):
+                    if not verify_rsa_pss_sha384(
+                        self.server_pubkey, padded, sig
+                    ):
+                        raise Error(
+                            "RSA PSS signature failed (alg="
+                            + hex(sig_alg)
+                            + ")"
+                        )
                 elif sig_alg == SIG_RSA_PKCS1_SHA256:
+                    if not verify_rsa_pkcs1v15(self.server_pubkey, padded, sig):
+                        raise Error("RSA PKCS1 signature failed")
+                elif sig_alg == SIG_RSA_PKCS1_SHA384:
                     if not verify_rsa_pkcs1v15(self.server_pubkey, padded, sig):
                         raise Error("RSA PKCS1 signature failed")
                 elif sig_alg == SIG_ECDSA_SECP256R1_SHA256:
@@ -1048,41 +1252,99 @@ struct TLS13Client[T: TLSTransport](Movable):
                         ph.append(ph_arr[i])
                     if not verify_ecdsa_p256_hash(self.server_pubkey, ph, sig):
                         raise Error("ECDSA P256 signature failed")
+                elif sig_alg == SIG_ECDSA_SECP384R1_SHA384:
+                    from crypto.sha384 import sha384
+
+                    var ph_arr = sha384(padded)
+                    var ph = List[UInt8]()
+                    for i in range(48):
+                        ph.append(ph_arr[i])
+                    if not verify_ecdsa_p384_hash(self.server_pubkey, ph, sig):
+                        raise Error("ECDSA P384 signature failed")
 
             elif msg.msg_type == HS_FINISHED:
-                var transcript_hash_fin = sha256(self.transcript)
-                var expected_fin = hmac_sha256(
-                    Span(self.keys.server_finished_key),
-                    Span(transcript_hash_fin),
-                )
-                for i in range(32):
-                    if msg.payload[i] != expected_fin[i]:
-                        raise Error("Server Finished mismatch")
+                if self.use_sha384:
+                    from crypto.hmac import hmac_sha384
+                    from crypto.sha384 import sha384
+
+                    var transcript_hash_fin = sha384(self.transcript)
+                    var expected_fin = hmac_sha384(
+                        Span(self.keys.server_finished_key),
+                        Span(transcript_hash_fin),
+                    )
+                    for i in range(48):
+                        if msg.payload[i] != expected_fin[i]:
+                            raise Error("Server Finished mismatch")
+                else:
+                    var transcript_hash_fin = sha256(self.transcript)
+                    var expected_fin = hmac_sha256(
+                        Span(self.keys.server_finished_key),
+                        Span(transcript_hash_fin),
+                    )
+                    for i in range(32):
+                        if msg.payload[i] != expected_fin[i]:
+                            raise Error("Server Finished mismatch")
 
                 self.transcript.extend(full^)
-                var derived2 = _tls13_hkdf_expand_label[32](
-                    Span(self.handshake_secret),
-                    "derived",
-                    Span(sha256(Span(List[UInt8]()))),
-                )
-                var master_arr = hkdf_extract(Span(derived2), Span(zeros(32)))
-                var master = List[UInt8]()
-                for i in range(32):
-                    master.append(master_arr[i])
-                self._derive_app_keys(Span(master))
+                if self.use_sha384:
+                    from crypto.hkdf import hkdf_extract_sha384
+                    from crypto.sha384 import sha384
+
+                    var empty_list = List[UInt8]()
+                    var derived2 = _tls13_hkdf_expand_label_sha384[48](
+                        Span(self.handshake_secret),
+                        "derived",
+                        Span(sha384(Span(empty_list))),
+                    )
+                    var zeros48 = List[UInt8]()
+                    for _ in range(48):
+                        zeros48.append(0)
+                    var master_arr = hkdf_extract_sha384(
+                        Span(derived2), Span(zeros48)
+                    )
+                    var master = List[UInt8]()
+                    for i in range(48):
+                        master.append(master_arr[i])
+                    self._derive_app_keys_sha384(Span(master))
+                else:
+                    var derived2 = _tls13_hkdf_expand_label[32](
+                        Span(self.handshake_secret),
+                        "derived",
+                        Span(sha256(Span(List[UInt8]()))),
+                    )
+                    var master_arr = hkdf_extract(
+                        Span(derived2), Span(zeros(32))
+                    )
+                    var master = List[UInt8]()
+                    for i in range(32):
+                        master.append(master_arr[i])
+                    self._derive_app_keys(Span(master))
                 got_finished = True
                 continue  # Skip the general transcript update at the end
 
             self.transcript.extend(full^)
 
         # 3. Send Client Finished
-        var transcript_hash_f = sha256(self.transcript)
-        var client_fin_verify = hmac_sha256(
-            Span(self.keys.client_finished_key), Span(transcript_hash_f)
-        )
-        var fin_body = List[UInt8](capacity=32)
-        for i in range(32):
-            fin_body.append(client_fin_verify[i])
+        var fin_body: List[UInt8]
+        if self.use_sha384:
+            from crypto.hmac import hmac_sha384
+            from crypto.sha384 import sha384
+
+            var transcript_hash_f = sha384(self.transcript)
+            var client_fin_verify = hmac_sha384(
+                Span(self.keys.client_finished_key), Span(transcript_hash_f)
+            )
+            fin_body = List[UInt8](capacity=48)
+            for i in range(48):
+                fin_body.append(client_fin_verify[i])
+        else:
+            var transcript_hash_f = sha256(self.transcript)
+            var client_fin_verify = hmac_sha256(
+                Span(self.keys.client_finished_key), Span(transcript_hash_f)
+            )
+            fin_body = List[UInt8](capacity=32)
+            for i in range(32):
+                fin_body.append(client_fin_verify[i])
         var fin_msg = _wrap_handshake(HS_FINISHED, fin_body)
         self.send_handshake(fin_msg.copy(), True)
         self.transcript.extend(fin_msg^)
@@ -1102,7 +1364,7 @@ struct TLS13Client[T: TLSTransport](Movable):
             self.app_seq_out,
         )
         self.app_seq_out += 1
-        _ = self.transport.write(Span(_bytes_to_bytes(record)))
+        _ = self.transport.write(Span(record))
 
     fn read_app_data(mut self) raises -> List[UInt8]:
         """Reads and decrypts application data."""
@@ -1158,14 +1420,3 @@ struct TLS13Client[T: TLSTransport](Movable):
                 return out^
             else:
                 continue
-
-
-fn _bytes_to_bytes(list: List[UInt8]) -> List[Byte]:
-    """Converts a UInt8 list to a Byte list."""
-
-    var out = List[Byte](capacity=len(list))
-
-    for i in range(len(list)):
-        out.append(Byte(list[i]))
-
-    return out^

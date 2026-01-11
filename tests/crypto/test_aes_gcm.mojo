@@ -9,6 +9,8 @@ from crypto.aes_gcm import (
 )
 from crypto.bytes import hex_to_bytes, bytes_to_hex
 from memory import Span
+from python import Python
+from logger_utils import default_logger, log_info
 
 
 fn test_aes128_block_vector() raises:
@@ -101,8 +103,66 @@ fn test_gcm_vector_with_aad() raises:
     assert_equal(bytes_to_hex(opened.plaintext), bytes_to_hex(pt))
 
 
+fn test_aes_gcm_wycheproof() raises:
+    var log = default_logger()
+    log_info(log, "Testing AES-GCM Wycheproof...")
+    var json = Python.import_module("json")
+    var builtins = Python.import_module("builtins")
+
+    var f = builtins.open("tests/fixtures/wycheproof/aes_gcm_test.json", "r")
+    var data = json.load(f)
+    f.close()
+
+    var test_groups = data["testGroups"]
+    for i in range(builtins.len(test_groups)):
+        var group = test_groups[i]
+        var key_size = Int(group["keySize"])
+        if key_size != 128:
+            continue  # We only support AES-128 for now
+
+        var tests = group["tests"]
+        for j in range(builtins.len(tests)):
+            var test = tests[j]
+            var tc_id = String(test["tcId"])
+            var key = hex_to_bytes(String(test["key"]))
+            var iv = hex_to_bytes(String(test["iv"]))
+            var aad = hex_to_bytes(String(test["aad"]))
+            var msg = hex_to_bytes(String(test["msg"]))
+            var ct = hex_to_bytes(String(test["ct"]))
+            var tag = hex_to_bytes(String(test["tag"]))
+            var result = String(test["result"])
+
+            # Test Open
+            var tag_arr = InlineArray[UInt8, 16](0)
+            for k in range(min(16, len(tag))):
+                tag_arr[k] = tag[k]
+            var opened = aes_gcm_open_internal(
+                Span(key), Span(iv), Span(aad), Span(ct), tag_arr
+            )
+            if result == "valid" or result == "acceptable":
+                if not opened.success:
+                    raise Error(
+                        "AES-GCM Wycheproof FAILURE: failed to open valid test "
+                        + tc_id
+                    )
+                if bytes_to_hex(opened.plaintext) != bytes_to_hex(msg):
+                    raise Error(
+                        "AES-GCM Wycheproof FAILURE: PT mismatch in test "
+                        + tc_id
+                    )
+            elif result == "invalid":
+                if opened.success:
+                    raise Error(
+                        "AES-GCM Wycheproof FAILURE: opened invalid test "
+                        + tc_id
+                    )
+
+    log_info(log, "AES-GCM Wycheproof passed!")
+
+
 fn main() raises:
     test_aes128_block_vector()
     test_gcm_vector_empty()
     test_gcm_vector_one_block()
     test_gcm_vector_with_aad()
+    test_aes_gcm_wycheproof()
