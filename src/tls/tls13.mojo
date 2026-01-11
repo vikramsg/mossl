@@ -33,6 +33,7 @@ alias HS_ENCRYPTED_EXTENSIONS = UInt8(8)
 alias HS_CERTIFICATE = UInt8(11)
 alias HS_CERT_VERIFY = UInt8(15)
 alias HS_FINISHED = UInt8(20)
+alias HS_KEY_UPDATE = UInt8(24)
 
 alias EXT_SNI = UInt16(0x0000)
 alias EXT_SUPPORTED_GROUPS = UInt16(0x000A)
@@ -304,14 +305,16 @@ fn _read_exact[
 ](mut transport: T, size: Int) raises -> List[UInt8]:
     """Reads exactly N bytes from the transport."""
     var out = List[UInt8](capacity=size)
-    var buf = Bytes(capacity=size)
     while len(out) < size:
-        while len(buf) > 0:
-            _ = buf.pop()
+        var remaining = size - len(out)
+        var buf = Bytes(capacity=remaining)
         var n = transport.read(buf)
         if n == 0:
             raise Error("TLS read_exact: unexpected EOF")
-        for i in range(n):
+        var to_copy = n
+        if to_copy > remaining:
+            to_copy = remaining
+        for i in range(to_copy):
             out.append(UInt8(buf[i]))
     return out^
 
@@ -562,6 +565,7 @@ struct TLS13Client[T: TLSTransport](Movable):
     var hs_seq_out: UInt64
     var handshake_done: Bool
     var defragmenter: HandshakeDefragmenter
+    var post_handshake_defragmenter: HandshakeDefragmenter
 
     fn __init__(out self, var transport: T, host: String):
         """Initializes the client with a transport and remote host."""
@@ -578,6 +582,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.hs_seq_out = 0
         self.handshake_done = False
         self.defragmenter = HandshakeDefragmenter()
+        self.post_handshake_defragmenter = HandshakeDefragmenter()
 
     fn __moveinit__(out self, deinit other: Self):
         """Move constructor for TLS13Client."""
@@ -594,6 +599,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.hs_seq_out = other.hs_seq_out
         self.handshake_done = other.handshake_done
         self.defragmenter = other.defragmenter^
+        self.post_handshake_defragmenter = other.post_handshake_defragmenter^
 
     fn encrypt_record(
         self,
@@ -849,6 +855,70 @@ struct TLS13Client[T: TLSTransport](Movable):
             Span(self.keys.server_app_secret), "iv", Span(empty)
         )
 
+    fn _update_server_app_keys(mut self) raises:
+        """Updates server application traffic keys after a KeyUpdate."""
+        var empty = List[UInt8]()
+        var next_secret = _tls13_hkdf_expand_label[32](
+            Span(self.keys.server_app_secret), "traffic upd", Span(empty)
+        )
+        self.keys.server_app_secret = List[UInt8]()
+        for i in range(32):
+            self.keys.server_app_secret.append(next_secret[i])
+
+        var next_key = _tls13_hkdf_expand_label[16](
+            Span(self.keys.server_app_secret), "key", Span(empty)
+        )
+        self.keys.server_app_key = List[UInt8]()
+        for i in range(16):
+            self.keys.server_app_key.append(next_key[i])
+
+        self.keys.server_app_iv = _tls13_hkdf_expand_label[12](
+            Span(self.keys.server_app_secret), "iv", Span(empty)
+        )
+
+    fn _update_client_app_keys(mut self) raises:
+        """Updates client application traffic keys after sending a KeyUpdate."""
+        var empty = List[UInt8]()
+        var next_secret = _tls13_hkdf_expand_label[32](
+            Span(self.keys.client_app_secret), "traffic upd", Span(empty)
+        )
+        self.keys.client_app_secret = List[UInt8]()
+        for i in range(32):
+            self.keys.client_app_secret.append(next_secret[i])
+
+        var next_key = _tls13_hkdf_expand_label[16](
+            Span(self.keys.client_app_secret), "key", Span(empty)
+        )
+        self.keys.client_app_key = List[UInt8]()
+        for i in range(16):
+            self.keys.client_app_key.append(next_key[i])
+
+        self.keys.client_app_iv = _tls13_hkdf_expand_label[12](
+            Span(self.keys.client_app_secret), "iv", Span(empty)
+        )
+
+    fn _send_key_update(mut self, request_update: Bool) raises:
+        """Sends a KeyUpdate and rotates client traffic keys."""
+        var body = List[UInt8]()
+        if request_update:
+            body.append(1)
+        else:
+            body.append(0)
+        var msg = _wrap_handshake(HS_KEY_UPDATE, body)
+
+        var key = self.keys.client_app_key.copy()
+        var iv = self.keys.client_app_iv
+        var record = self.encrypt_record(
+            Span(msg),
+            CONTENT_HANDSHAKE,
+            Span(key),
+            iv,
+            self.app_seq_out,
+        )
+        self.app_seq_out += 1
+        _ = self.transport.write(Span(_bytes_to_bytes(record)))
+        self._update_client_app_keys()
+
     fn perform_handshake(mut self) raises -> Bool:
         """Executes the TLS 1.3 handshake sequence."""
         var client_random = _random_bytes(32)
@@ -874,7 +944,9 @@ struct TLS13Client[T: TLSTransport](Movable):
         var sh = ByteCursor(sh_msg.payload)
         _ = sh.read_u16()
         _ = sh.read_bytes(32)
-        _ = sh.read_u8()
+        var session_id_len = Int(sh.read_u8())
+        if session_id_len > 0:
+            _ = sh.read_bytes(session_id_len)
         var cipher = sh.read_u16()
         print("  - Selected cipher: " + hex(cipher))
         _ = sh.read_u8()
@@ -1075,6 +1147,21 @@ struct TLS13Client[T: TLSTransport](Movable):
                     # This avoids stalling on keep-alive connections.
                     # For now, we return after each record to match the HTTP client loop.
                     return out^
+                elif dec.inner_type == CONTENT_HANDSHAKE:
+                    self.post_handshake_defragmenter.add_data(dec.content)
+                    while self.post_handshake_defragmenter.has_full_message():
+                        var hs_msg = (
+                            self.post_handshake_defragmenter.next_message()
+                        )
+                        if hs_msg.msg_type == HS_KEY_UPDATE:
+                            if len(hs_msg.payload) != 1:
+                                raise Error("Invalid KeyUpdate payload length")
+                            var request_update = hs_msg.payload[0] == 1
+                            self._update_server_app_keys()
+                            if request_update:
+                                self._send_key_update(False)
+                        else:
+                            continue
                 elif dec.inner_type == CONTENT_ALERT:
                     return out^
             elif r.content_type == CONTENT_ALERT:
