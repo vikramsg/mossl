@@ -95,7 +95,7 @@ fn hkdf_expand_sha384(
 
     for i in range(1, n + 1):
         var input = List[UInt8](capacity=len(t_prev) + len(info) + 1)
-        input.extend(t_prev)
+        input.extend(t_prev^)
         input.extend(info)
         input.append(UInt8(i))
 

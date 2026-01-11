@@ -1,14 +1,15 @@
 from collections import InlineArray
 from collections import List
+from logger import Level, Logger
 from testing import assert_false, assert_true, assert_equal
 
 from memory import Span
 
 from crypto.aes_gcm import aes_gcm_open_internal, aes_gcm_seal_internal
 
-
 fn test_aes_gcm_negative() raises:
-    print("Testing AES-GCM negative validation...")
+    var log = Logger[Level.INFO]()
+    log.info("Testing AES-GCM negative validation...")
     var key = List[UInt8]()
     for _ in range(16):
         key.append(1)
@@ -53,7 +54,7 @@ fn test_aes_gcm_negative() raises:
     )
     assert_false(res.success, "Opened with wrong AAD")
 
-    print("AES-GCM negative tests passed!")
+    log.info("AES-GCM negative tests passed!")
 
 
 fn main() raises:

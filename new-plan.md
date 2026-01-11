@@ -26,6 +26,9 @@ Goal: make `make test-https` pass reliably and keep full suite green.
 - [ ] Add a brief comment if any non-obvious decision is made.
 - [ ] Keep Mojo guidelines: no `mut` outputs, no tuples, prefer `@fieldwise_init`.
 - [ ] If Mojo syntax is unclear, consult `docs/syntax` before editing production code.
+- [ ] Replace debug `print` calls with the Mojo `logger` where appropriate (tests).
+- [ ] Remove debug-only `print` calls from production code.
+- [ ] Fix any compiler warnings introduced or surfaced by changes.
 
 ### 5) Validate
 - [ ] Re-run `timeout 60s pixi run test-https` until it passes consistently.
@@ -33,6 +36,7 @@ Goal: make `make test-https` pass reliably and keep full suite green.
 - [ ] Run `timeout 60s pixi run test-trace` if trace/spec changes were made.
 - [ ] Run `timeout 60s pixi run test-all`.
 - [ ] Run `pixi run format`.
+- [ ] Run `timeout 300s pixi run bash bench/bench_https_get.sh` and check for regressions.
 
 ### 6) Final Review
 - [ ] Summarize root cause and fix.

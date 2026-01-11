@@ -437,13 +437,6 @@ fn _verify_signature_with_issuer(
     if _oid_equal(cert.signature_oid, oid_ecdsa_sha384):
         var h = sha384_bytes(cert.tbs)
         var ok = verify_ecdsa_p384_hash(issuer_pubkey, h, cert.signature)
-        if not ok:
-            print(
-                "  ECDSA-SHA384 verification failed for "
-                + _to_string(cert.subject_cn)
-            )
-            print("  Issuer key len: " + String(len(issuer_pubkey)))
-            print("  Signature len: " + String(len(cert.signature)))
         return ok
     if _oid_equal(cert.signature_oid, oid_rsa_sha256):
         return verify_rsa_pkcs1v15(issuer_pubkey, cert.tbs, cert.signature)

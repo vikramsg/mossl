@@ -81,7 +81,7 @@ struct HandshakeDefragmenter(Movable):
 
     fn add_data(mut self, data: List[UInt8]):
         """Adds raw decrypted record content to the buffer."""
-        self.buffer.extend(data)
+        self.buffer.extend(data.copy())
 
     fn has_full_message(self) -> Bool:
         """Checks if at least one full message is in the buffer."""
@@ -656,18 +656,10 @@ struct TLS13Client[T: TLSTransport](Movable):
             tag[i] = payload[len(payload) - 16 + i]
         var aad = _build_record_aad(len(payload))
         var nonce = _xor_iv(iv, seq)
-        print(
-            "  - Decrypt: seq="
-            + String(seq)
-            + " payload_len="
-            + String(len(payload))
-        )
-
         var opened = aes_gcm_open_internal(
             key, Span(nonce), Span(aad), Span(ct), tag
         )
         if not opened.success:
-            print("  - Decrypt FAILED: seq=" + String(seq))
             raise Error("TLS decrypt: auth failed")
         var pt = opened.plaintext.copy()
 
@@ -677,7 +669,6 @@ struct TLS13Client[T: TLSTransport](Movable):
         if idx < 0:
             raise Error("TLS decrypt: no content type")
         var content_type = pt[idx]
-        print("  - Decrypt SUCCESS: inner_type=" + String(content_type))
         var content = List[UInt8]()
         for j in range(idx):
             content.append(pt[j])
@@ -934,7 +925,7 @@ struct TLS13Client[T: TLSTransport](Movable):
 
         var ch_body = _make_client_hello(self.host, client_random, client_pub)
         var ch_msg = _wrap_handshake(HS_CLIENT_HELLO, ch_body)
-        self.transcript.extend(ch_msg)
+        self.transcript.extend(ch_msg.copy())
         self.send_handshake(ch_msg, False)
 
         # 1. Read ServerHello
@@ -948,7 +939,6 @@ struct TLS13Client[T: TLSTransport](Movable):
         if session_id_len > 0:
             _ = sh.read_bytes(session_id_len)
         var cipher = sh.read_u16()
-        print("  - Selected cipher: " + hex(cipher))
         _ = sh.read_u8()
 
         # Determine PRF based on cipher
@@ -1069,7 +1059,7 @@ struct TLS13Client[T: TLSTransport](Movable):
                     if msg.payload[i] != expected_fin[i]:
                         raise Error("Server Finished mismatch")
 
-                self.transcript.extend(full)
+                self.transcript.extend(full^)
                 var derived2 = _tls13_hkdf_expand_label[32](
                     Span(self.handshake_secret),
                     "derived",
@@ -1083,7 +1073,7 @@ struct TLS13Client[T: TLSTransport](Movable):
                 got_finished = True
                 continue  # Skip the general transcript update at the end
 
-            self.transcript.extend(full)
+            self.transcript.extend(full^)
 
         # 3. Send Client Finished
         var transcript_hash_f = sha256(self.transcript)
@@ -1094,8 +1084,8 @@ struct TLS13Client[T: TLSTransport](Movable):
         for i in range(32):
             fin_body.append(client_fin_verify[i])
         var fin_msg = _wrap_handshake(HS_FINISHED, fin_body)
-        self.send_handshake(fin_msg, True)
-        self.transcript.extend(fin_msg)
+        self.send_handshake(fin_msg.copy(), True)
+        self.transcript.extend(fin_msg^)
 
         self.handshake_done = True
         return True

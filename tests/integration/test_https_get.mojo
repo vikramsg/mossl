@@ -1,3 +1,4 @@
+from logger import Level, Logger
 from testing import assert_equal
 
 from lightbug_http import HTTPRequest, URI, to_string
@@ -6,7 +7,8 @@ from tls.https_client import HTTPSClient
 
 
 fn test_https_get_site(url: String) raises:
-    print("Testing " + url + "...")
+    var log = Logger[Level.INFO]()
+    log.info("Testing ", url, "...")
     var client = HTTPSClient(allow_redirects=True)
     var uri = URI.parse(url)
     var req = HTTPRequest(uri)
@@ -14,7 +16,7 @@ fn test_https_get_site(url: String) raises:
     assert_equal(res.status_code, 200)
     _ = to_string(res.body_raw.copy())
 
-    print("Successfully tested ", url)
+    log.info("Successfully tested ", url)
 
 
 fn main() raises:

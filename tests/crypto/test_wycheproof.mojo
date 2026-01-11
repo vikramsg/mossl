@@ -1,6 +1,7 @@
 from collections import InlineArray
 from collections import List
 
+from logger import Level, Logger
 from memory import Span
 from python import Python
 
@@ -10,9 +11,9 @@ from crypto.hmac import hmac_sha256
 from crypto.sha256 import sha256
 from crypto.x25519 import x25519
 
-
 fn test_hmac_sha256_wycheproof() raises:
-    print("Testing HMAC-SHA256 Wycheproof...")
+    var log = Logger[Level.INFO]()
+    log.info("Testing HMAC-SHA256 Wycheproof...")
     var json = Python.import_module("json")
     var builtins = Python.import_module("builtins")
 
@@ -60,11 +61,12 @@ fn test_hmac_sha256_wycheproof() raises:
                         + tc_id
                     )
 
-    print("HMAC-SHA256 Wycheproof passed!")
+    log.info("HMAC-SHA256 Wycheproof passed!")
 
 
 fn test_aes_gcm_wycheproof() raises:
-    print("Testing AES-GCM Wycheproof...")
+    var log = Logger[Level.INFO]()
+    log.info("Testing AES-GCM Wycheproof...")
     var json = Python.import_module("json")
     var builtins = Python.import_module("builtins")
 
@@ -116,11 +118,12 @@ fn test_aes_gcm_wycheproof() raises:
                         + tc_id
                     )
 
-    print("AES-GCM Wycheproof passed!")
+    log.info("AES-GCM Wycheproof passed!")
 
 
 fn test_x25519_wycheproof() raises:
-    print("Testing X25519 Wycheproof...")
+    var log = Logger[Level.INFO]()
+    log.info("Testing X25519 Wycheproof...")
     var json = Python.import_module("json")
     var builtins = Python.import_module("builtins")
 
@@ -164,7 +167,7 @@ fn test_x25519_wycheproof() raises:
                 if shared_hex != "" and got_hex != shared_hex:
                     pass
 
-    print("X25519 Wycheproof passed!")
+    log.info("X25519 Wycheproof passed!")
 
 
 fn main() raises:

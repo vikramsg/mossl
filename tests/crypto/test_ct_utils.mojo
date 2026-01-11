@@ -1,4 +1,5 @@
 from collections import List
+from logger import Level, Logger
 from testing import assert_true, assert_false, assert_equal
 
 from crypto.bytes import constant_time_compare, ct_select, ct_swap
@@ -36,7 +37,8 @@ fn test_ct_swap() raises:
 
 
 fn main() raises:
+    var log = Logger[Level.INFO]()
     test_constant_time_compare()
     test_ct_select()
     test_ct_swap()
-    print("Constant-time utils tests passed!")
+    log.info("Constant-time utils tests passed!")

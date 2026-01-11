@@ -51,20 +51,6 @@ struct DerReader:
         var length = self.read_len()
         var header_len = self.offset - start
         if self.offset + length > len(self.data):
-            print(
-                "ASN1 Debug: tag="
-                + hex(Int(tag))
-                + " start="
-                + String(start)
-                + " hlen="
-                + String(header_len)
-                + " length="
-                + String(length)
-                + " offset="
-                + String(self.offset)
-                + " data_len="
-                + String(len(self.data))
-            )
             raise Error("ASN1: TLV length exceeds data")
         self.offset += length
         return DerSlice(tag, start, header_len, length)

@@ -1,11 +1,13 @@
 from collections import List
+from logger import Level, Logger
 from testing import assert_equal, assert_true
 
 from tls.tls13 import random_bytes
 
 
 fn test_random_bytes() raises:
-    print("Testing random_bytes...")
+    var log = Logger[Level.INFO]()
+    log.info("Testing random_bytes...")
     var n = 32
     var b1 = random_bytes(n)
     assert_equal(len(b1), n)
@@ -20,7 +22,7 @@ fn test_random_bytes() raises:
             identical = False
             break
     assert_true(not identical, "random_bytes returned identical data")
-    print("random_bytes test passed!")
+    log.info("random_bytes test passed!")
 
 
 fn main() raises:
