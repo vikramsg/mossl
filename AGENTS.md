@@ -37,6 +37,7 @@ We follow the following process for coding:
 2. Always add timeout when running code, eg `timeout 60s pixi run ...`.
     - If the code is expected to take longer than 60 seconds, use a larger timeout.
     - This ensures if the code hangs, it will be killed and the test will fail.
+    - **ATTENTION** Do not forget to use a timeout. 
 
 ## Tool calls
 

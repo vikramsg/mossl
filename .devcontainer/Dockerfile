@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y zsh curl \
     && chsh -s /usr/bin/zsh root \
     && git config --system --add safe.directory '*'
 
+# Quint liveness checks require Java
+RUN apt-get install -y default-jre 
+
 # Switch to the vscode user
 USER vscode
 
