@@ -2,12 +2,13 @@ from collections import InlineArray
 
 from benchmark import run, keep
 
-# Mojo argument conventions:
-# 1. borrowed (default): The function gets a read-only reference. No copy is made.
-#    This is the most efficient for large types.
-# 2. inout: The function gets a mutable reference. Changes affect the caller.
-# 3. owned: The function takes ownership. This may involve a copy (if the caller
-#    doesn't use ^) or a move (if the caller uses ^).
+# Mojo modern argument conventions:
+# 1. read (default in fn): The function gets a read-only reference. No copy is made.
+#    This replaces the obsolete 'borrowed' keyword.
+# 2. mut: The function gets a mutable reference. Changes affect the caller.
+#    This replaces the obsolete 'inout' keyword.
+# 3. var: The function takes ownership (equivalent to the old 'owned'). 
+#    This may involve a copy or a move (if the caller uses ^).
 
 struct LargeStruct(Copyable, Movable):
     var data: InlineArray[Int, 1024]
@@ -15,56 +16,56 @@ struct LargeStruct(Copyable, Movable):
     fn __init__(out self, data: InlineArray[Int, 1024]):
         self.data = data
 
-    fn __copyinit__(out self, other: Self):
-        # Explicit copy logic
+    fn __copyinit__(out self, read other: Self):
+        # Explicit copy logic using 'read' convention
         self.data = other.data
 
     fn __moveinit__(out self, deinit other: Self):
-        # Efficient move logic (transferring ownership)
+        # Efficient move logic using 'deinit' to signal destruction of source
         self.data = other.data
 
     fn copy(self) -> Self:
         return LargeStruct(self.data)
 
-# 's' is borrowed by default in 'fn'. It's read-only and passed by reference.
-fn pass_borrowed_reference(s: LargeStruct):
+# 's' is read-only. We use the explicit 'read' keyword for demonstration.
+fn pass_read_reference(read s: LargeStruct):
     var x = s.data[0]
     keep(x)
 
-# 's' is owned. The function gets its own unique instance.
-fn pass_owned_value(var s: LargeStruct):
+# 's' is owned/mutable copy. The function gets its own unique instance.
+fn pass_var_owned(var s: LargeStruct):
     var x = s.data[0]
     keep(x)
 
-fn test_borrowed():
+fn test_read():
     var s = LargeStruct(InlineArray[Int, 1024](0))
     for _ in range(1000):
-        # Passing by reference, very fast.
-        pass_borrowed_reference(s)
+        # Passing by reference (read), very fast.
+        pass_read_reference(s)
 
-fn test_owned_move():
+fn test_var_move():
     for _ in range(1000):
         var s = LargeStruct(InlineArray[Int, 1024](0))
-        # Use '^' (transfer operator) to move ownership instead of copying.
-        pass_owned_value(s^)
+        # Use '^' (transfer operator) to move ownership.
+        pass_var_owned(s^)
 
-fn test_owned_copy():
+fn test_var_copy():
     var s = LargeStruct(InlineArray[Int, 1024](0))
     for _ in range(1000):
-        # Explicit copy: expensive for large structures.
-        pass_owned_value(s.copy())
+        # Explicit copy when passing to a 'var' argument
+        pass_var_owned(s.copy())
 
 fn main() raises:
-    print("--- Argument Conventions (1024 Ints struct) ---")
+    print("--- Modern Argument Conventions (1024 Ints struct) ---")
     
-    # Borrowed is usually the fastest as it avoids all memory management/copying.
-    var report_borrowed = run[test_borrowed](max_runtime_secs=0.5)
-    print("Borrowed Reference: Mean:", report_borrowed.mean("ms"), "ms")
+    # 'read' is usually the fastest as it avoids all memory management/copying.
+    var report_read = run[test_read](max_runtime_secs=0.5)
+    print("Read Reference: Mean:", report_read.mean("ms"), "ms")
 
     # Move is efficient but requires setting up the object to be moved.
-    var report_move = run[test_owned_move](max_runtime_secs=0.5)
-    print("Owned (Moved):      Mean:", report_move.mean("ms"), "ms")
+    var report_move = run[test_var_move](max_runtime_secs=0.5)
+    print("Var (Moved):    Mean:", report_move.mean("ms"), "ms")
 
     # Copy is the slowest due to memory duplication.
-    var report_copy = run[test_owned_copy](max_runtime_secs=0.5)
-    print("Owned (Copied):     Mean:", report_copy.mean("ms"), "ms")
+    var report_copy = run[test_var_copy](max_runtime_secs=0.5)
+    print("Var (Copied):   Mean:", report_copy.mean("ms"), "ms")

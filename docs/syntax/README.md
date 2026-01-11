@@ -12,7 +12,7 @@ This document provides a comprehensive overview of performance insights for Mojo
 | **Bitwise** | `bit` module vs Manual | `bit` module | **~1700x faster** | 0.0000005 vs 0.00099 |
 | **SIMD** | `SIMD` (8) vs Scalar | `SIMD` | **~5x faster** | 0.00012 vs 0.00060 |
 | **Memory** | `List` vs `UnsafePointer` | `List` | **Comparable** | 0.0052 vs 0.0053 |
-| **Arguments** | `borrowed` vs `owned` | `borrowed` | **High efficiency** | ~0.0005 |
+| **Arguments** | `read` vs `var` | `read` | **High efficiency** | ~0.0005 |
 | **Specialization**| `@parameter` vs Runtime | `@parameter` | **~34% faster** | 0.0007 vs 0.0010 |
 | **Syntactic Sugar**| Comprehension vs Append | Manual Append | **~33% faster** | 0.0013 vs 0.0018 |
 
@@ -30,16 +30,18 @@ This document provides a comprehensive overview of performance insights for Mojo
 
 - **Insight**: For small workloads (size 10,000), thread orchestration overhead is significant. Prefer `vectorize` for memory-bound SIMD tasks.
 
-### 2. Argument Conventions
+### 2. Argument Conventions (Modern Syntax)
 **File:** `syntax_arguments.mojo` (8KB Struct)
 
 | Convention | Mean Latency (ms) |
 | :--- | :--- |
-| `borrowed` (Reference) | 0.000524 |
-| `owned` (Move `^`) | 0.000568 |
-| `owned` (Copy) | 0.000470 |
+| `read` (Reference) | 0.000524 |
+| `var` (Moved `^`) | 0.000568 |
+| `var` (Copied) | 0.000470 |
 
-- **Insight**: Semantically, `borrowed` is preferred for large structs to avoid ownership overhead, though microbenchmarks for simple access may show noise.
+- **Insight**: `read` is the modern name for immutable references (formerly `borrowed`). It is the default for `fn` arguments.
+- **Insight**: `var` is the modern name for owned/mutable arguments (formerly `owned`).
+- **Insight**: `mut` is the modern name for mutable references (formerly `inout`).
 
 ### 3. Specialization with `@parameter`
 **File:** `syntax_parameter.mojo`
@@ -114,8 +116,6 @@ This document provides a comprehensive overview of performance insights for Mojo
 | `@unroll` | 0.00000052 |
 | No Unroll | 0.00000050 |
 
-- **Insight**: For very small, simple loops, the performance is identical as the compiler likely auto-unrolls or optimizes them away.
-
 ### 9. Always Inline
 **File:** `syntax_always_inline.mojo` (3 levels)
 
@@ -123,8 +123,6 @@ This document provides a comprehensive overview of performance insights for Mojo
 | :--- | :--- |
 | `@always_inline` | 0.00000066 |
 | Standard Function | 0.00000054 |
-
-- **Insight**: In this microbenchmark, standard functions performed similarly, likely due to compiler heuristics auto-inlining small functions.
 
 ## Methodology
 Benchmarks were conducted using the Mojo `benchmark` module with `max_runtime_secs=0.5`. Each result represents the mean latency for the specified workload. Values were verified on Sunday, January 11, 2026.
