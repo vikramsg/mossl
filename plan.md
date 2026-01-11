@@ -17,13 +17,20 @@ Refactor the trivial `pki_chain.qnt` into a robust `pki_path_validation.qnt` mod
 ### Logical Rules (Actions)
 - **`add_cert`**: Append a certificate to the current chain.
 - **`validate_step`**: 
-    - Check if `current_chain[i].issuer == current_chain[i+1].subject`.
-    - Check if `current_chain[i]` is signed by `current_chain[i+1]` (modeled by matching `public_key_id`).
+    - **Subject/Issuer**: Check if `current_chain[i].issuer == current_chain[i+1].subject`.
+    - **Signature**: Check if `current_chain[i]` is signed by `current_chain[i+1]` (modeled by matching `public_key_id`).
+    - **Basic Constraints**: Check if `current_chain[i+1]` has the `is_ca` flag set to true (preventing leaf-as-issuer attacks).
+    - **Validity Period**: Check if `current_time` is between `not_before` and `not_after`.
 - **`check_root`**: Verify if the last certificate in the chain is in the `TrustStore`.
 
-### Properties to Verify
-- **Liveness**: A valid chain from a leaf to a trusted root eventually reaches `Valid` status.
-- **Safety**: A chain with a subject/issuer mismatch or an unknown root never reaches `Valid` status.
+### Completeness Analysis
+To be truly "complete" (RFC 5280 compliant), the spec must eventually account for:
+1. **Name Constraints**: Ensure a CA only issues for allowed subdomains.
+2. **Policy Constraints**: Complex rules for certificate usage policies.
+3. **Revocation**: CRL/OCSP status (not modeled in this phase).
+4. **Path Length**: Restricting the maximum depth of the chain.
+
+The initial refactor will focus on the **critical security quartet**: Subject/Issuer, Signatures, CA Flags, and Validity.
 
 ## 2. Mojo Trace Test (`tests/pki/test_pki_path_trace.mojo`)
 
