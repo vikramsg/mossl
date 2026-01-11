@@ -19,8 +19,8 @@ fn test_sealer_sequence_progression() raises:
     var sealer = RecordSealer(key, iv)
     var sealed0 = sealer.seal(hex_to_bytes(""), hex_to_bytes(""))
     var sealed1 = sealer.seal(hex_to_bytes(""), hex_to_bytes(""))
-    var nonce0 = sealed0[2].copy()
-    var nonce1 = sealed1[2].copy()
+    var nonce0 = sealed0.nonce.copy()
+    var nonce1 = sealed1.nonce.copy()
     assert_equal(bytes_to_hex(nonce0), "000000000000000000000000")
     assert_equal(bytes_to_hex(nonce1), "000000000000000000000001")
 

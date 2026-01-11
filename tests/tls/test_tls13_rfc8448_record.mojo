@@ -2,9 +2,11 @@ from collections import List
 from testing import assert_equal
 
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
-from crypto.aes_gcm import aes_gcm_open
+from crypto.aes_gcm import aes_gcm_open_internal
 from crypto.bytes import hex_to_bytes, bytes_to_hex
 from tls.record_layer import build_nonce
+from memory import Span
+from collections import InlineArray
 
 
 fn build_record_aad(length: Int) -> List[UInt8]:
@@ -17,19 +19,30 @@ fn build_record_aad(length: Int) -> List[UInt8]:
     return out^
 
 
-fn strip_inner_plaintext(inner: List[UInt8]) -> (List[UInt8], UInt8):
+struct DecryptedInner(Movable):
+    var content: List[UInt8]
+    var content_type: UInt8
+
+    fn __init__(out self, var content: List[UInt8], content_type: UInt8):
+        self.content = content^
+        self.content_type = content_type
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.content = other.content^
+        self.content_type = other.content_type
+
+
+fn strip_inner_plaintext(inner: List[UInt8]) -> DecryptedInner:
     var idx = len(inner) - 1
     while idx >= 0 and inner[idx] == UInt8(0):
         idx -= 1
     if idx < 0:
-        return (List[UInt8](), UInt8(0))
+        return DecryptedInner(List[UInt8](), UInt8(0))
     var content_type = inner[idx]
     var content = List[UInt8]()
-    var i = 0
-    while i < idx:
+    for i in range(idx):
         content.append(inner[i])
-        i += 1
-    return (content^, content_type)
+    return DecryptedInner(content^, content_type)
 
 
 fn test_rfc8448_server_handshake_record() raises:
@@ -54,19 +67,22 @@ fn test_rfc8448_server_handshake_record() raises:
 
     var ct = List[UInt8]()
     var tag = List[UInt8]()
-    i = 0
-    while i < len(payload) - 16:
-        ct.append(payload[i])
-        i += 1
-    while i < len(payload):
-        tag.append(payload[i])
-        i += 1
+    for j in range(len(payload) - 16):
+        ct.append(payload[j])
+    for j in range(len(payload) - 16, len(payload)):
+        tag.append(payload[j])
 
-    var opened = aes_gcm_open(key, nonce, aad, ct, tag)
-    assert_equal(opened[1], True)
-    var inner = opened[0].copy()
+    var tag_arr = InlineArray[UInt8, 16](0)
+    for j in range(16):
+        tag_arr[j] = tag[j]
+
+    var opened = aes_gcm_open_internal(
+        Span(key), Span(nonce), Span(aad), Span(ct), tag_arr
+    )
+    assert_equal(opened.success, True)
+    var inner = opened.plaintext.copy()
     var stripped = strip_inner_plaintext(inner)
-    assert_equal(stripped[1], UInt8(0x16))
+    assert_equal(stripped.content_type, UInt8(0x16))
 
     var expected = hex_to_bytes(
         "080000280026000a00140012001d00170018001901000101010201030104"
@@ -74,7 +90,7 @@ fn test_rfc8448_server_handshake_record() raises:
         "1400002048d3e0e1b3d907c6acff145e16090388c77b05c050b634ab1a88"
         "bbd0dd1a34b2"
     )
-    assert_equal(bytes_to_hex(stripped[0]), bytes_to_hex(expected))
+    assert_equal(bytes_to_hex(stripped.content), bytes_to_hex(expected))
 
 
 fn main() raises:

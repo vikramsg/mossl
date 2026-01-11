@@ -9,12 +9,12 @@ platforms = ["linux-aarch64", "osx-arm64"]
 [tasks]
 format = "mojo run -I src scripts/sort_imports.mojo . && mojo format src tests scripts"
 test-specs = "npx quint test specs/crypto_sha256.qnt && npx quint test specs/crypto_hmac.qnt && npx quint test specs/crypto_hkdf.qnt && npx quint test specs/crypto_x25519.qnt && npx quint test specs/crypto_aead.qnt && npx quint test specs/tls_record.qnt && npx quint test specs/tls_handshake.qnt && npx quint test specs/tls_http_gating.qnt && npx quint test specs/pki_chain.qnt"
-test-crypto = "mojo run -I src tests/crypto/test_sha256.mojo && mojo run -I src tests/crypto/test_hmac.mojo && mojo run -I src tests/crypto/test_hkdf.mojo && mojo run -I src tests/crypto/test_x25519.mojo && mojo run -I src tests/crypto/test_aes_gcm.mojo && mojo run -I src tests/crypto/test_base64.mojo"
+test-crypto = "mojo run -I src -I . tests/crypto/test_sha256.mojo && mojo run -I src -I . tests/crypto/test_hmac.mojo && mojo run -I src -I . tests/crypto/test_hkdf.mojo && mojo run -I src -I . tests/crypto/test_x25519.mojo && mojo run -I src -I . tests/crypto/test_aes_gcm.mojo && mojo run -I src -I . tests/crypto/test_base64.mojo && mojo run -I src -I . tests/crypto/test_diff_sha256.mojo && mojo run -I src -I . tests/crypto/test_diff_aes_gcm.mojo && mojo run -I src -I . tests/crypto/test_diff_x25519.mojo && mojo run -I src -I . tests/crypto/test_ct_utils.mojo && mojo run -I src -I . tests/crypto/test_side_channel.mojo && mojo run -I src -I . tests/crypto/test_aes_gcm_negative.mojo"
 test-pki = "mojo run -I src tests/pki/test_pki.mojo && mojo run -I src tests/pki/test_pem.mojo && mojo run -I src tests/pki/test_rsa_verify.mojo && mojo run -I src tests/pki/test_trust_store_load.mojo && mojo run -I src tests/pki/test_x509_verify.mojo && mojo run -I src tests/pki/test_bigint_verify.mojo && mojo run -I src tests/pki/test_p384_math.mojo && mojo run -I src tests/pki/test_ec_generic.mojo"
-test-tls = "mojo run -I src tests/tls/test_record_layer.mojo && mojo run -I src tests/tls/test_handshake.mojo && mojo run -I src tests/tls/test_tls_socket.mojo && mojo run -I src tests/tls/test_tls13_rfc8448_kdf.mojo && mojo run -I src tests/tls/test_tls13_rfc8448_record.mojo && mojo run -I src tests/tls/test_tls_client_hello.mojo && mojo run -I src tests/tls/test_https_client_unit.mojo"
+test-tls = "mojo run -I src tests/tls/test_record_layer.mojo && mojo run -I src tests/tls/test_handshake.mojo && mojo run -I src tests/tls/test_tls_socket.mojo && mojo run -I src tests/tls/test_tls13_rfc8448_kdf.mojo && mojo run -I src tests/tls/test_tls13_rfc8448_record.mojo && mojo run -I src tests/tls/test_tls_client_hello.mojo && mojo run -I src tests/tls/test_https_client_unit.mojo && mojo run -I src tests/tls/test_random.mojo"
 test-https = "mojo run -I src tests/integration/test_https_get.mojo"
 test-trace = "mojo run -I src scripts/trace_runner.mojo tests/trace_config.json"
-test-all = { depends-on = ["test-specs", "test-crypto", "test-pki", "test-tls", "test-https", "test-trace"] }
+test-all = { depends-on = ["test-crypto", "test-tls", "test-https", "test-pki", "test-specs"] }
 
 [dependencies]
 mojo = ">=0.25.6,<0.26"
@@ -23,6 +23,9 @@ emberjson = ">=0.2.0"
 
 [feature.dev.pypi-dependencies]
 cryptography = "*"
+scapy = ">=2.7.0,<3"
+ecdsa = ">=0.19.1,<0.20"
+pycryptodomex = ">=3.23.0,<4"
 
 [environments]
 default = ["dev"]

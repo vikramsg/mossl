@@ -59,8 +59,27 @@ struct UIntLimbs[N: Int](Copyable, ImplicitlyCopyable, Movable):
         return res
 
 
-@always_inline
 fn cmp[N: Int](a: UIntLimbs[N], b: UIntLimbs[N]) -> Int:
+    """Compares two UIntLimbs (Public API)."""
+    return _cmp(a, b)
+
+
+fn sub_limbs[N: Int](a: UIntLimbs[N], b: UIntLimbs[N]) -> UIntLimbs[N]:
+    """Subtracts two UIntLimbs (Public API)."""
+    return _sub_limbs(a, b)
+
+
+fn mont_mul[
+    N: Int
+](
+    a: UIntLimbs[N], b: UIntLimbs[N], m: UIntLimbs[N], n0_inv: UInt64
+) -> UIntLimbs[N]:
+    """Performs Montgomery multiplication (Public API)."""
+    return _mont_mul(a, b, m, n0_inv)
+
+
+@always_inline
+fn _cmp[N: Int](a: UIntLimbs[N], b: UIntLimbs[N]) -> Int:
     for i in range(N):
         var idx = N - 1 - i
         if a.limbs[idx] > b.limbs[idx]:
@@ -71,7 +90,7 @@ fn cmp[N: Int](a: UIntLimbs[N], b: UIntLimbs[N]) -> Int:
 
 
 @always_inline
-fn sub_limbs[N: Int](a: UIntLimbs[N], b: UIntLimbs[N]) -> UIntLimbs[N]:
+fn _sub_limbs[N: Int](a: UIntLimbs[N], b: UIntLimbs[N]) -> UIntLimbs[N]:
     var res = UIntLimbs[N]()
     var borrow = Int128(0)
 
@@ -84,7 +103,7 @@ fn sub_limbs[N: Int](a: UIntLimbs[N], b: UIntLimbs[N]) -> UIntLimbs[N]:
 
 
 @always_inline
-fn add_mod[
+fn _add_mod[
     N: Int
 ](a: UIntLimbs[N], b: UIntLimbs[N], m: UIntLimbs[N]) -> UIntLimbs[N]:
     var res = UIntLimbs[N]()
@@ -95,18 +114,18 @@ fn add_mod[
         res.limbs[i] = UInt64(s)
         carry = UInt64(s >> 64)
 
-    if carry > 0 or cmp(res, m) >= 0:
-        return sub_limbs(res, m)
+    if carry > 0 or _cmp(res, m) >= 0:
+        return _sub_limbs(res, m)
     return res
 
 
 @always_inline
-fn sub_mod[
+fn _sub_mod[
     N: Int
 ](a: UIntLimbs[N], b: UIntLimbs[N], m: UIntLimbs[N]) -> UIntLimbs[N]:
-    if cmp(a, b) >= 0:
-        return sub_limbs(a, b)
-    var diff = sub_limbs(a, b)
+    if _cmp(a, b) >= 0:
+        return _sub_limbs(a, b)
+    var diff = _sub_limbs(a, b)
     # Add modulus
     var res = UIntLimbs[N]()
     var carry = UInt64(0)
@@ -117,7 +136,7 @@ fn sub_mod[
     return res
 
 
-fn mont_mul[
+fn _mont_mul[
     N: Int
 ](
     a: UIntLimbs[N], b: UIntLimbs[N], m: UIntLimbs[N], n0_inv: UInt64
@@ -171,19 +190,19 @@ fn mont_mul[
     var overflow = t[2 * N]
     t.free()
 
-    if overflow > 0 or cmp(res, m) >= 0:
-        return sub_limbs(res, m)
+    if overflow > 0 or _cmp(res, m) >= 0:
+        return _sub_limbs(res, m)
 
     return res
 
 
-fn mont_sqr[
+fn _mont_sqr[
     N: Int
 ](a: UIntLimbs[N], m: UIntLimbs[N], n0_inv: UInt64) -> UIntLimbs[N]:
-    return mont_mul(a, a, m, n0_inv)
+    return _mont_mul(a, a, m, n0_inv)
 
 
-fn mont_pow[
+fn _mont_pow[
     N: Int
 ](
     base: UIntLimbs[N],
@@ -202,133 +221,100 @@ fn mont_pow[
         var bit = (exp.limbs[limb_idx] >> bit_idx) & 1
 
         if bit == 1:
-            res = mont_mul(res, b, m, n0_inv)
-        b = mont_sqr(b, m, n0_inv)
+            res = _mont_mul(res, b, m, n0_inv)
+        b = _mont_sqr(b, m, n0_inv)
 
     return res
 
 
+@fieldwise_init
 struct FieldContext[N: Int](Copyable, ImplicitlyCopyable, Movable):
     var m: UIntLimbs[N]
     var n0_inv: UInt64
     var r2: UIntLimbs[N]
     var one: UIntLimbs[N]
 
-    fn __init__(
-        out self,
-        m: UIntLimbs[N],
-        n0_inv: UInt64,
-        r2: UIntLimbs[N],
-        one: UIntLimbs[N],
-    ):
-        self.m = m
-        self.n0_inv = n0_inv
-        self.r2 = r2
-        self.one = one
 
-    fn __copyinit__(out self, other: Self):
-        self.m = other.m
-        self.n0_inv = other.n0_inv
-        self.r2 = other.r2
-        self.one = other.one
-
-    fn __moveinit__(out self, deinit other: Self):
-        self.m = other.m
-        self.n0_inv = other.n0_inv
-        self.r2 = other.r2
-        self.one = other.one
-
-
-fn inv_mod[N: Int](a: UIntLimbs[N], ctx: FieldContext[N]) -> UIntLimbs[N]:
+fn _inv_mod[N: Int](a: UIntLimbs[N], ctx: FieldContext[N]) -> UIntLimbs[N]:
     var two = UIntLimbs[N](2)
-    var exp = sub_limbs(ctx.m, two)
-    return mont_pow(a, exp, ctx.m, ctx.n0_inv, ctx.one)
+    var exp = _sub_limbs(ctx.m, two)
+    return _mont_pow(a, exp, ctx.m, ctx.n0_inv, ctx.one)
 
 
+@fieldwise_init
 struct PointJac[N: Int](Copyable, ImplicitlyCopyable, Movable):
     var x: UIntLimbs[N]
     var y: UIntLimbs[N]
     var z: UIntLimbs[N]
 
-    fn __init__(out self, x: UIntLimbs[N], y: UIntLimbs[N], z: UIntLimbs[N]):
-        self.x = x
-        self.y = y
-        self.z = z
-
-    fn __copyinit__(out self, other: Self):
-        self.x = other.x
-        self.y = other.y
-        self.z = other.z
-
-    fn __moveinit__(out self, deinit other: Self):
-        self.x = other.x
-        self.y = other.y
-        self.z = other.z
-
     fn is_infinity(self) -> Bool:
         return self.z.is_zero()
 
 
-fn from_affine[
+fn _from_affine[
     N: Int
 ](x: UIntLimbs[N], y: UIntLimbs[N], ctx: FieldContext[N]) -> PointJac[N]:
-    var z = ctx.one
-    var x_mont = mont_mul(x, ctx.r2, ctx.m, ctx.n0_inv)
-    var y_mont = mont_mul(y, ctx.r2, ctx.m, ctx.n0_inv)
-    return PointJac(x_mont, y_mont, z)
+    # Convert affine coordinates to Montgomery form: (x * R^2) * R^-1 = x * R mod m
+    var x_mont = _mont_mul(x, ctx.r2, ctx.m, ctx.n0_inv)
+    var y_mont = _mont_mul(y, ctx.r2, ctx.m, ctx.n0_inv)
+    # Z = 1 in Montgomery form is R mod m (stored in ctx.one)
+    return PointJac(x_mont, y_mont, ctx.one)
 
 
-fn to_affine[N: Int](p: PointJac[N], ctx: FieldContext[N]) -> PointJac[N]:
+fn _to_affine[N: Int](p: PointJac[N], ctx: FieldContext[N]) -> PointJac[N]:
     if p.is_infinity():
         return p
 
-    var z_inv = inv_mod(p.z, ctx)
-    var z2 = mont_sqr(z_inv, ctx.m, ctx.n0_inv)
-    var z3 = mont_mul(z2, z_inv, ctx.m, ctx.n0_inv)
+    var z_inv = _inv_mod(p.z, ctx)
+    var z2 = _mont_sqr(z_inv, ctx.m, ctx.n0_inv)
+    var z3 = _mont_mul(z2, z_inv, ctx.m, ctx.n0_inv)
 
-    var x = mont_mul(p.x, z2, ctx.m, ctx.n0_inv)
-    var y = mont_mul(p.y, z3, ctx.m, ctx.n0_inv)
+    # These are still in Montgomery form (X*R, Y*R)
+    var x_mont = _mont_mul(p.x, z2, ctx.m, ctx.n0_inv)
+    var y_mont = _mont_mul(p.y, z3, ctx.m, ctx.n0_inv)
 
-    x = mont_mul(x, UIntLimbs[N](1), ctx.m, ctx.n0_inv)
-    y = mont_mul(y, UIntLimbs[N](1), ctx.m, ctx.n0_inv)
+    # Convert back from Montgomery form: (x * R) * 1 * R^-1 = x mod m
+    var literal_one = UIntLimbs[N](1)
+    var x = _mont_mul(x_mont, literal_one, ctx.m, ctx.n0_inv)
+    var y = _mont_mul(y_mont, literal_one, ctx.m, ctx.n0_inv)
 
     return PointJac(x, y, UIntLimbs[N](0))
 
 
-fn jac_double[N: Int](p: PointJac[N], ctx: FieldContext[N]) -> PointJac[N]:
+fn _jac_double[N: Int](p: PointJac[N], ctx: FieldContext[N]) -> PointJac[N]:
     if p.is_infinity():
         return p
 
-    var t1 = mont_sqr(p.y, ctx.m, ctx.n0_inv)
-    var t2 = mont_mul(p.x, t1, ctx.m, ctx.n0_inv)
-    var s = add_mod(t2, t2, ctx.m)
-    s = add_mod(s, s, ctx.m)
+    var t1 = _mont_sqr(p.y, ctx.m, ctx.n0_inv)
+    var t2 = _mont_mul(p.x, t1, ctx.m, ctx.n0_inv)
+    var s = _add_mod(t2, t2, ctx.m)
+    s = _add_mod(s, s, ctx.m)
 
-    var z2 = mont_sqr(p.z, ctx.m, ctx.n0_inv)
-    var x_minus = sub_mod(p.x, z2, ctx.m)
-    var x_plus = add_mod(p.x, z2, ctx.m)
-    var m_val = mont_mul(x_minus, x_plus, ctx.m, ctx.n0_inv)
-    var m_val3 = add_mod(m_val, m_val, ctx.m)
-    m_val3 = add_mod(m_val3, m_val, ctx.m)
+    var z2 = _mont_sqr(p.z, ctx.m, ctx.n0_inv)
+    var x_minus = _sub_mod(p.x, z2, ctx.m)
+    var x_plus = _add_mod(p.x, z2, ctx.m)
+    var m_val = _mont_mul(x_minus, x_plus, ctx.m, ctx.n0_inv)
+    var m_val3 = _add_mod(m_val, m_val, ctx.m)
+    m_val3 = _add_mod(m_val3, m_val, ctx.m)
 
-    var m2 = mont_sqr(m_val3, ctx.m, ctx.n0_inv)
-    var x3 = sub_mod(sub_mod(m2, s, ctx.m), s, ctx.m)
+    var m2 = _mont_sqr(m_val3, ctx.m, ctx.n0_inv)
+    var x3 = _sub_mod(_sub_mod(m2, s, ctx.m), s, ctx.m)
 
-    var y2_sq = mont_sqr(t1, ctx.m, ctx.n0_inv)
-    var y2_sq8 = add_mod(y2_sq, y2_sq, ctx.m)
-    y2_sq8 = add_mod(y2_sq8, y2_sq8, ctx.m)
-    y2_sq8 = add_mod(y2_sq8, y2_sq8, ctx.m)
+    var y2_sq = _mont_sqr(t1, ctx.m, ctx.n0_inv)
+    var y2_sq8 = _add_mod(y2_sq, y2_sq, ctx.m)
+    y2_sq8 = _add_mod(y2_sq8, y2_sq8, ctx.m)
+    y2_sq8 = _add_mod(y2_sq8, y2_sq8, ctx.m)
 
-    var dy = sub_mod(s, x3, ctx.m)
-    var y3 = sub_mod(mont_mul(m_val3, dy, ctx.m, ctx.n0_inv), y2_sq8, ctx.m)
+    var dy = _sub_mod(s, x3, ctx.m)
+    var y3 = _sub_mod(_mont_mul(m_val3, dy, ctx.m, ctx.n0_inv), y2_sq8, ctx.m)
 
-    var yz = mont_mul(p.y, p.z, ctx.m, ctx.n0_inv)
-    var z3 = add_mod(yz, yz, ctx.m)
+    var yz = _mont_mul(p.y, p.z, ctx.m, ctx.n0_inv)
+    var z3 = _add_mod(yz, yz, ctx.m)
 
     return PointJac(x3, y3, z3)
 
 
-fn jac_add[
+fn _jac_add[
     N: Int
 ](p: PointJac[N], q: PointJac[N], ctx: FieldContext[N]) -> PointJac[N]:
     if p.is_infinity():
@@ -336,65 +322,65 @@ fn jac_add[
     if q.is_infinity():
         return p
 
-    var z1z1 = mont_sqr(p.z, ctx.m, ctx.n0_inv)
-    var z2z2 = mont_sqr(q.z, ctx.m, ctx.n0_inv)
+    var z1z1 = _mont_sqr(p.z, ctx.m, ctx.n0_inv)
+    var z2z2 = _mont_sqr(q.z, ctx.m, ctx.n0_inv)
 
-    var u1 = mont_mul(p.x, z2z2, ctx.m, ctx.n0_inv)
-    var u2 = mont_mul(q.x, z1z1, ctx.m, ctx.n0_inv)
+    var u1 = _mont_mul(p.x, z2z2, ctx.m, ctx.n0_inv)
+    var u2 = _mont_mul(q.x, z1z1, ctx.m, ctx.n0_inv)
 
-    var z2z2z2 = mont_mul(q.z, z2z2, ctx.m, ctx.n0_inv)
-    var s1 = mont_mul(p.y, z2z2z2, ctx.m, ctx.n0_inv)
+    var z2z2z2 = _mont_mul(q.z, z2z2, ctx.m, ctx.n0_inv)
+    var s1 = _mont_mul(p.y, z2z2z2, ctx.m, ctx.n0_inv)
 
-    var z1z1z1 = mont_mul(p.z, z1z1, ctx.m, ctx.n0_inv)
-    var s2 = mont_mul(q.y, z1z1z1, ctx.m, ctx.n0_inv)
+    var z1z1z1 = _mont_mul(p.z, z1z1, ctx.m, ctx.n0_inv)
+    var s2 = _mont_mul(q.y, z1z1z1, ctx.m, ctx.n0_inv)
 
-    if cmp(u1, u2) == 0:
-        if cmp(s1, s2) == 0:
-            return jac_double(p, ctx)
+    if _cmp(u1, u2) == 0:
+        if _cmp(s1, s2) == 0:
+            return _jac_double(p, ctx)
         return PointJac(UIntLimbs[N](0), UIntLimbs[N](0), UIntLimbs[N](0))
 
-    var h = sub_mod(u2, u1, ctx.m)
-    var r = sub_mod(s2, s1, ctx.m)
+    var h = _sub_mod(u2, u1, ctx.m)
+    var r = _sub_mod(s2, s1, ctx.m)
 
-    var hh = mont_sqr(h, ctx.m, ctx.n0_inv)
-    var hhh = mont_mul(h, hh, ctx.m, ctx.n0_inv)
-    var v = mont_mul(u1, hh, ctx.m, ctx.n0_inv)
+    var hh = _mont_sqr(h, ctx.m, ctx.n0_inv)
+    var hhh = _mont_mul(h, hh, ctx.m, ctx.n0_inv)
+    var v = _mont_mul(u1, hh, ctx.m, ctx.n0_inv)
 
-    var r2 = mont_sqr(r, ctx.m, ctx.n0_inv)
-    var x3 = sub_mod(r2, hhh, ctx.m)
-    x3 = sub_mod(x3, v, ctx.m)
-    x3 = sub_mod(x3, v, ctx.m)
+    var r2 = _mont_sqr(r, ctx.m, ctx.n0_inv)
+    var x3 = _sub_mod(r2, hhh, ctx.m)
+    x3 = _sub_mod(x3, v, ctx.m)
+    x3 = _sub_mod(x3, v, ctx.m)
 
-    var dy = sub_mod(v, x3, ctx.m)
-    var y3 = sub_mod(
-        mont_mul(r, dy, ctx.m, ctx.n0_inv),
-        mont_mul(s1, hhh, ctx.m, ctx.n0_inv),
+    var dy = _sub_mod(v, x3, ctx.m)
+    var y3 = _sub_mod(
+        _mont_mul(r, dy, ctx.m, ctx.n0_inv),
+        _mont_mul(s1, hhh, ctx.m, ctx.n0_inv),
         ctx.m,
     )
 
-    var z1z2 = mont_mul(p.z, q.z, ctx.m, ctx.n0_inv)
-    var z3 = mont_mul(h, z1z2, ctx.m, ctx.n0_inv)
+    var z1z2 = _mont_mul(p.z, q.z, ctx.m, ctx.n0_inv)
+    var z3 = _mont_mul(h, z1z2, ctx.m, ctx.n0_inv)
 
     return PointJac(x3, y3, z3)
 
 
-fn precompute_table[
+fn _precompute_table[
     N: Int
 ](p: PointJac[N], ctx: FieldContext[N]) -> InlineArray[PointJac[N], 16]:
     var zero = PointJac(UIntLimbs[N](0), UIntLimbs[N](0), UIntLimbs[N](0))
     var table = InlineArray[PointJac[N], 16](zero)
     table[1] = p
-    var p2 = jac_double(p, ctx)
+    var p2 = _jac_double(p, ctx)
     table[2] = p2
 
     var curr = p2
     for i in range(3, 16):
-        curr = jac_add(curr, p, ctx)
+        curr = _jac_add(curr, p, ctx)
         table[i] = curr
     return table
 
 
-fn double_scalar_mul_windowed[
+fn _double_scalar_mul_windowed[
     N: Int
 ](
     u1: UIntLimbs[N],
@@ -403,8 +389,8 @@ fn double_scalar_mul_windowed[
     p2: PointJac[N],
     ctx: FieldContext[N],
 ) -> PointJac[N]:
-    var t1 = precompute_table(p1, ctx)
-    var t2 = precompute_table(p2, ctx)
+    var t1 = _precompute_table(p1, ctx)
+    var t2 = _precompute_table(p2, ctx)
     var res = PointJac(UIntLimbs[N](0), UIntLimbs[N](0), UIntLimbs[N](0))
 
     # Iterate from top bit down.
@@ -415,10 +401,10 @@ fn double_scalar_mul_windowed[
 
     for i in range(steps):
         var w = steps - 1 - i
-        res = jac_double(res, ctx)
-        res = jac_double(res, ctx)
-        res = jac_double(res, ctx)
-        res = jac_double(res, ctx)
+        res = _jac_double(res, ctx)
+        res = _jac_double(res, ctx)
+        res = _jac_double(res, ctx)
+        res = _jac_double(res, ctx)
 
         var limb_idx = w // 16  # which 64-bit limb
         var shift = (w % 16) * 4
@@ -427,9 +413,9 @@ fn double_scalar_mul_windowed[
         var val2 = (u2.limbs[limb_idx] >> shift) & 0xF
 
         if val1 != 0:
-            res = jac_add(res, t1[Int(val1)], ctx)
+            res = _jac_add(res, t1[Int(val1)], ctx)
         if val2 != 0:
-            res = jac_add(res, t2[Int(val2)], ctx)
+            res = _jac_add(res, t2[Int(val2)], ctx)
 
     return res
 
@@ -447,39 +433,42 @@ fn verify_generic[
     ctx: FieldContext[N],
     scalar_ctx: FieldContext[N],
 ) -> Bool:
-    if cmp(r, scalar_ctx.m) >= 0 or cmp(s, scalar_ctx.m) >= 0:
+    if _cmp(r, scalar_ctx.m) >= 0 or _cmp(s, scalar_ctx.m) >= 0:
         return False
     if r.is_zero() or s.is_zero():
         return False
 
     # s^-1 mod n
     var two = UIntLimbs[N](2)
-    var n_minus_2 = sub_limbs(scalar_ctx.m, two)
+    var n_minus_2 = _sub_limbs(scalar_ctx.m, two)
 
-    # s to mont
-    var s_mont = mont_mul(s, scalar_ctx.r2, scalar_ctx.m, scalar_ctx.n0_inv)
-    var w_mont = mont_pow(
+    # Convert s to mont: s * R mod n
+    var s_mont = _mont_mul(s, scalar_ctx.r2, scalar_ctx.m, scalar_ctx.n0_inv)
+
+    # s^-1 in mont form (already uses scalar_ctx.one which is R mod n)
+    var w_mont = _mont_pow(
         s_mont, n_minus_2, scalar_ctx.m, scalar_ctx.n0_inv, scalar_ctx.one
     )
 
-    var h_mont = mont_mul(hash, scalar_ctx.r2, scalar_ctx.m, scalar_ctx.n0_inv)
-    var r_mont = mont_mul(r, scalar_ctx.r2, scalar_ctx.m, scalar_ctx.n0_inv)
+    var h_mont = _mont_mul(hash, scalar_ctx.r2, scalar_ctx.m, scalar_ctx.n0_inv)
+    var r_mont = _mont_mul(r, scalar_ctx.r2, scalar_ctx.m, scalar_ctx.n0_inv)
 
-    var u1_mont = mont_mul(h_mont, w_mont, scalar_ctx.m, scalar_ctx.n0_inv)
-    var u2_mont = mont_mul(r_mont, w_mont, scalar_ctx.m, scalar_ctx.n0_inv)
+    var u1_mont = _mont_mul(h_mont, w_mont, scalar_ctx.m, scalar_ctx.n0_inv)
+    var u2_mont = _mont_mul(r_mont, w_mont, scalar_ctx.m, scalar_ctx.n0_inv)
 
-    # From mont to normal
-    var u1 = mont_mul(u1_mont, UIntLimbs[N](1), scalar_ctx.m, scalar_ctx.n0_inv)
-    var u2 = mont_mul(u2_mont, UIntLimbs[N](1), scalar_ctx.m, scalar_ctx.n0_inv)
+    # From mont to normal: (x * R) * 1 * R^-1 = x mod n
+    var literal_one = UIntLimbs[N](1)
+    var u1 = _mont_mul(u1_mont, literal_one, scalar_ctx.m, scalar_ctx.n0_inv)
+    var u2 = _mont_mul(u2_mont, literal_one, scalar_ctx.m, scalar_ctx.n0_inv)
 
-    var G = from_affine(gx, gy, ctx)
-    var Q = from_affine(pub_x, pub_y, ctx)
+    var G = _from_affine(gx, gy, ctx)
+    var Q = _from_affine(pub_x, pub_y, ctx)
 
-    var res = double_scalar_mul_windowed(u1, G, u2, Q, ctx)
-    var res_aff = to_affine(res, ctx)
+    var res = _double_scalar_mul_windowed(u1, G, u2, Q, ctx)
+    var res_aff = _to_affine(res, ctx)
 
     var v = res_aff.x
-    if cmp(v, scalar_ctx.m) >= 0:
-        v = sub_limbs(v, scalar_ctx.m)
+    if _cmp(v, scalar_ctx.m) >= 0:
+        v = _sub_limbs(v, scalar_ctx.m)
 
-    return cmp(v, r) == 0
+    return _cmp(v, r) == 0

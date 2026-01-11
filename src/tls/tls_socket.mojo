@@ -10,17 +10,16 @@ from tls.tls13 import TLS13Client
 from tls.transport import TLSTransport
 
 
+@fieldwise_init
 struct SocketTransport(Movable, TLSTransport):
     var socket: Socket[TCPAddr]
-
-    fn __init__(out self, var socket: Socket[TCPAddr]):
-        self.socket = socket^
 
     fn read(self, mut buf: Bytes) raises -> Int:
         return Int(self.socket.receive(buf))
 
-    fn write(self, buf: Span[Byte]) raises -> Int:
-        return Int(self.socket.send(buf))
+    fn write(self, buf: Span[UInt8]) raises -> Int:
+        self.socket.send_all(buf, len(buf))
+        return len(buf)
 
     fn close(mut self) raises:
         self.socket.close()
@@ -49,7 +48,7 @@ struct NullTransport(Movable, TLSTransport):
     fn read(self, mut buf: Bytes) raises -> Int:
         return 0
 
-    fn write(self, buf: Span[Byte]) raises -> Int:
+    fn write(self, buf: Span[UInt8]) raises -> Int:
         return len(buf)
 
     fn close(mut self) raises:
@@ -87,11 +86,12 @@ struct TLSSocket[T: TLSTransport](Movable):
     fn read(mut self, mut buf: Bytes) raises -> Int:
         if not self.handshake_ok:
             raise Error("TLSSocket.read: Handshake not complete.")
+
         var data = self.tls.read_app_data()
         while len(buf) > 0:
             _ = buf.pop()
-        for b in data:
-            buf.append(Byte(b))
+        for i in range(len(data)):
+            buf.append(Byte(data[i]))
         return len(buf)
 
     fn write(mut self, buf: Span[Byte]) raises -> Int:

@@ -6,6 +6,7 @@ from lightbug_http.connection import default_buffer_size
 from lightbug_http.header import HeaderKey, Headers
 from lightbug_http.http import HTTPResponse, HTTPRequest
 from lightbug_http.io.bytes import Bytes, byte
+from logger_utils import default_logger, log_info
 
 from tls.https_client import HTTPReader, _read_until_eof, _read_response
 
@@ -36,7 +37,8 @@ struct MockHTTPReader(HTTPReader, Movable):
 
 
 fn test_read_until_eof_timeout() raises:
-    print("Testing _read_until_eof timeout...")
+    var log = default_logger()
+    log_info(log, "Testing _read_until_eof timeout...")
     var reader = MockHTTPReader(stall=True)
 
     var start = time.perf_counter()
@@ -45,7 +47,7 @@ fn test_read_until_eof_timeout() raises:
     var end = time.perf_counter()
 
     var duration = end - start
-    print("Stalling read took: " + String(duration) + "s")
+    log_info(log, "Stalling read took: " + String(duration) + "s")
 
     assert_true(duration >= 0.2, "Should have waited at least the timeout")
     assert_true(duration < 1.0, "Should have timed out reasonably fast")
@@ -53,7 +55,11 @@ fn test_read_until_eof_timeout() raises:
 
 
 fn test_read_response_content_length_zero() raises:
-    print("Testing _read_response with Content-Length: 0 (should not stall)...")
+    var log = default_logger()
+    log_info(
+        log,
+        "Testing _read_response with Content-Length: 0 (should not stall)...",
+    )
     var raw = (
         String("HTTP/1.1 301 Moved Permanently\r\n")
         + String("Location: https://github.com/\r\n")
@@ -73,7 +79,7 @@ fn test_read_response_content_length_zero() raises:
     var end = time.perf_counter()
 
     var duration = end - start
-    print("Response parsing took: " + String(duration) + "s")
+    log_info(log, "Response parsing took: " + String(duration) + "s")
 
     assert_true(
         duration < 0.1, "Should have returned immediately without stalling"

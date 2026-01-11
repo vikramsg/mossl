@@ -17,6 +17,17 @@ We follow the following process for coding:
 5. Run the unit test and trace test and ensure it passes.
 6. If the tests fail, fix the implementation and repeat the process.
 7. If the tests pass, move on to the next operation.
+8. Always add docstrings to all important functions and traits.
+    - Always add a code comment when a non-obvious decision was made.
+
+### Breaking loops
+
+1. When you are unsure about syntax, instead of creating changes and running and failing repeatedly, do this:
+    - Create docs/syntax/syntax_tests.mojo
+    - Break down the problem into small testable bits, add to the script and test.
+    - Only once that you are sure it will work, add it to the main code. 
+    - Add to docs/syntax/notes.md on all such findings that should be noted.
+
 
 **Important:** Only stop after successfull doing `make test-all` and `make format`. 
 
@@ -27,8 +38,23 @@ We follow the following process for coding:
     - If the code is expected to take longer than 60 seconds, use a larger timeout.
     - This ensures if the code hangs, it will be killed and the test will fail.
 
+## Tool calls
+
+- When doing `grep` make sure to ignore `.pixi` folder.
+- Prefer always adding reasonable timeouts to tool calls.
 
 ## Mojo 
+
+### Repo
+
+https://github.com/modular/modular
+
+### Functions
+
+- Prefer **NEVER** mutating variables within a function. fn(mut a):a += 1.... Always return values.
+- Never return Tuples. If multiple values have to be returned prefer creating a @fieldwise_init struct
+- Prefer creating traits for reusable code.
+- Never EVER do ` try: do something except: pass`. Blind try - excepts are a hack and are strictly forbidden.
 
 ### List Comprehension
 Mojo supports list comprehensions. For example, to build a `List[UInt8]` of 16 zeros:
@@ -93,7 +119,16 @@ Prefer using the standard library modules instead of writing custom code.
 - **time**: Timing operations: monotonic clocks, performance counters, sleep, time_function.
 - **utils**
 
+## Working with github libraries
 
+There are various situations where you may want to work with repositories on Github. 
+
+1. Integrate an external library into the project, in which case we need to know the library's API's. 
+2. Understand how another library works. 
+3. Obtain data from it. 
+
+In all these cases prefer cloning these repos into `/tmp`, using `git clone <REPO URL> /tmp/repo` and then searching through the repo.
+Use web search only if you are not sure about the correct location of the repo.
 
 ## Pixi
 

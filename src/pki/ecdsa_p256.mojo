@@ -3,7 +3,7 @@ from collections import List
 from pki.asn1 import DerReader, read_sequence_reader, read_integer_bytes
 from pki.ec_arithmetic import UIntLimbs, verify_generic, FieldContext
 
-from crypto.sha256 import sha256_bytes
+from crypto.sha256 import sha256
 
 alias U256 = UIntLimbs[4]
 
@@ -129,4 +129,8 @@ fn verify_ecdsa_p256_hash(
 fn verify_ecdsa_p256(
     pubkey: List[UInt8], msg: List[UInt8], sig_der: List[UInt8]
 ) raises -> Bool:
-    return verify_ecdsa_p256_hash(pubkey, sha256_bytes(msg), sig_der)
+    var h = sha256(msg)
+    var h_list = List[UInt8](capacity=32)
+    for i in range(32):
+        h_list.append(h[i])
+    return verify_ecdsa_p256_hash(pubkey, h_list, sig_der)

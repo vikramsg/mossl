@@ -76,7 +76,67 @@ struct BigInt(Movable):
         return out.copy()
 
 
-fn cmp_limbs(a: List[UInt64], b: List[UInt64]) -> Int:
+fn bytes_to_bigint(bytes: List[UInt8]) -> List[UInt64]:
+    """Converts big-endian bytes to a list of limbs."""
+    return BigInt(bytes).limbs.copy()
+
+
+fn bigint_to_bytes(limbs: List[UInt64], target_len: Int = 0) -> List[UInt8]:
+    """Converts a list of limbs to big-endian bytes."""
+    return BigInt(limbs).to_be_bytes(target_len)
+
+
+fn bigint_compare(a: List[UInt64], b: List[UInt64]) -> Int:
+    """Compares two BigInts represented as lists of limbs."""
+    return _cmp_limbs(a, b)
+
+
+fn add_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
+    """Adds two lists of limbs (Public API)."""
+    return _add_limbs(a, b)
+
+
+fn sub_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
+    """Subtracts two lists of limbs (Public API)."""
+    return _sub_limbs(a, b)
+
+
+fn mul_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
+    """Multiplies two lists of limbs (Public API)."""
+    return _mul_limbs(a, b)
+
+
+fn shift_left(a: List[UInt64], n: Int) -> List[UInt64]:
+    """Shifts a list of limbs left by n bits (Public API)."""
+    return _shift_left(a, n)
+
+
+fn mod_reduce(n: List[UInt64], m: List[UInt64]) -> List[UInt64]:
+    """Reduces n modulo m (Public API)."""
+    return _mod_reduce(n.copy(), m)
+
+
+fn add_mod(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
+    """Adds a and b modulo mod (Public API)."""
+    return _add_mod(a, b, mod)
+
+
+fn sub_mod(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
+    """Subtracts b from a modulo mod (Public API)."""
+    return _sub_mod(a, b, mod)
+
+
+fn mod_mul(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
+    """Multiplies a and b modulo mod (Public API)."""
+    return _mod_mul(a, b, mod)
+
+
+fn mod_inv(a: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
+    """Computes the modular inverse of a modulo mod (Public API)."""
+    return _mod_inv(a, mod)
+
+
+fn _cmp_limbs(a: List[UInt64], b: List[UInt64]) -> Int:
     var i_max = len(a) - 1
     var j_max = len(b) - 1
     while i_max >= 0 and a[i_max] == 0:
@@ -97,7 +157,7 @@ fn cmp_limbs(a: List[UInt64], b: List[UInt64]) -> Int:
     return 0
 
 
-fn add_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
+fn _add_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     var out = List[UInt64]()
     var carry = UInt128(0)
     var i = 0
@@ -118,7 +178,7 @@ fn add_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     return out.copy()
 
 
-fn sub_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
+fn _sub_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     var out = List[UInt64]()
     var borrow = Int128(0)
     for i in range(len(a)):
@@ -138,7 +198,7 @@ fn sub_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     return out.copy()
 
 
-fn mul_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
+fn _mul_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     if len(a) == 0 or len(b) == 0:
         return List[UInt64]()
     var out = List[UInt64]()
@@ -157,7 +217,7 @@ fn mul_limbs(a: List[UInt64], b: List[UInt64]) -> List[UInt64]:
     return out.copy()
 
 
-fn shift_left(a: List[UInt64], n: Int) -> List[UInt64]:
+fn _shift_left(a: List[UInt64], n: Int) -> List[UInt64]:
     if n == 0:
         return a.copy()
     var word_shift = n // 64
@@ -179,10 +239,10 @@ fn shift_left(a: List[UInt64], n: Int) -> List[UInt64]:
     return out.copy()
 
 
-fn mod_reduce(var n: List[UInt64], m: List[UInt64]) -> List[UInt64]:
+fn _mod_reduce(var n: List[UInt64], m: List[UInt64]) -> List[UInt64]:
     if len(m) == 0:
         return List[UInt64]()
-    if cmp_limbs(n, m) < 0:
+    if _cmp_limbs(n, m) < 0:
         return n.copy()
 
     var m_bi = BigInt(m)
@@ -195,17 +255,17 @@ fn mod_reduce(var n: List[UInt64], m: List[UInt64]) -> List[UInt64]:
         if shift < 0:
             break
 
-        var m_s = shift_left(m, shift)
-        if cmp_limbs(n, m_s) < 0:
+        var m_s = _shift_left(m, shift)
+        if _cmp_limbs(n, m_s) < 0:
             if shift == 0:
                 break
-            m_s = shift_left(m, shift - 1)
+            m_s = _shift_left(m, shift - 1)
 
-        n = sub_limbs(n, m_s)
+        n = _sub_limbs(n, m_s)
     return n.copy()
 
 
-fn montgomery_n0_inv(mod0: UInt64) -> UInt64:
+fn _montgomery_n0_inv(mod0: UInt64) -> UInt64:
     # Compute -mod0^{-1} mod 2^64 using Newton-Raphson.
     var inv = UInt64(1)
     var i = 0
@@ -217,7 +277,7 @@ fn montgomery_n0_inv(mod0: UInt64) -> UInt64:
     return UInt64(0) - inv
 
 
-fn montgomery_reduce(
+fn _montgomery_reduce(
     t_in: List[UInt64], mod: List[UInt64], n0_inv: UInt64
 ) -> List[UInt64]:
     var k = len(mod)
@@ -260,21 +320,21 @@ fn montgomery_reduce(
         i2 += 1
     while len(out) > 0 and out[len(out) - 1] == 0:
         _ = out.pop()
-    if cmp_limbs(out, mod) >= 0:
-        return sub_limbs(out, mod)
+    if _cmp_limbs(out, mod) >= 0:
+        return _sub_limbs(out, mod)
     return out.copy()
 
 
-fn montgomery_mul_params(
+fn _montgomery_mul_params(
     a: List[UInt64], b: List[UInt64], mod: List[UInt64], n0_inv: UInt64
 ) -> List[UInt64]:
     if len(mod) == 0:
         return List[UInt64]()
     var k = len(mod)
-    var t = mul_limbs(a, b)
+    var t = _mul_limbs(a, b)
     while len(t) < k * 2 + 1:
         t.append(0)
-    return montgomery_reduce(t, mod, n0_inv)
+    return _montgomery_reduce(t, mod, n0_inv)
 
 
 fn mod_pow(
@@ -286,30 +346,30 @@ fn mod_pow(
     if (mod0 & 1) == 0:
         var res = List[UInt64]()
         res.append(1)
-        var b = mod_reduce(base.copy(), mod)
+        var b = _mod_reduce(base.copy(), mod)
         var e_bi = BigInt(exp)
         var bits = e_bi.bit_length()
         for i in range(bits):
             var bit_idx = bits - 1 - i
             var limb_idx = bit_idx // 64
             var bit_in_limb = bit_idx % 64
-            res = mod_mul(res, res, mod)
+            res = _mod_mul(res, res, mod)
             if ((exp[limb_idx] >> bit_in_limb) & 1) == 1:
-                res = mod_mul(res, b, mod)
+                res = _mod_mul(res, b, mod)
         return res.copy()
 
-    var n0_inv = montgomery_n0_inv(mod0)
+    var n0_inv = _montgomery_n0_inv(mod0)
     var k = len(mod)
     var r = List[UInt64]()
     r.append(1)
-    r = shift_left(r, 64 * k)
-    var r_mod = mod_reduce(r^, mod)
-    var r2 = mod_reduce(mul_limbs(r_mod.copy(), r_mod), mod)
-    var base_mod = mod_reduce(base.copy(), mod)
+    r = _shift_left(r, 64 * k)
+    var r_mod = _mod_reduce(r^, mod)
+    var r2 = _mod_reduce(_mul_limbs(r_mod.copy(), r_mod), mod)
+    var base_mod = _mod_reduce(base.copy(), mod)
     var one = List[UInt64]()
     one.append(1)
-    var res_m = montgomery_mul_params(one, r2.copy(), mod, n0_inv)
-    var b_m = montgomery_mul_params(base_mod, r2, mod, n0_inv)
+    var res_m = _montgomery_mul_params(one, r2.copy(), mod, n0_inv)
+    var b_m = _montgomery_mul_params(base_mod, r2, mod, n0_inv)
 
     var e_bi = BigInt(exp)
     var bits = e_bi.bit_length()
@@ -317,31 +377,37 @@ fn mod_pow(
         var bit_idx = bits - 1 - i
         var limb_idx = bit_idx // 64
         var bit_in_limb = bit_idx % 64
-        res_m = montgomery_mul_params(res_m, res_m, mod, n0_inv)
+        res_m = _montgomery_mul_params(res_m, res_m, mod, n0_inv)
         if ((exp[limb_idx] >> bit_in_limb) & 1) == 1:
-            res_m = montgomery_mul_params(res_m, b_m, mod, n0_inv)
-    return montgomery_mul_params(res_m, one, mod, n0_inv)
+            res_m = _montgomery_mul_params(res_m, b_m, mod, n0_inv)
+    return _montgomery_mul_params(res_m, one, mod, n0_inv)
 
 
-fn add_mod(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
-    var sum = add_limbs(a, b)
-    if cmp_limbs(sum, mod) >= 0:
-        return sub_limbs(sum, mod)
+fn _add_mod(
+    a: List[UInt64], b: List[UInt64], mod: List[UInt64]
+) -> List[UInt64]:
+    var sum = _add_limbs(a, b)
+    if _cmp_limbs(sum, mod) >= 0:
+        return _sub_limbs(sum, mod)
     return sum.copy()
 
 
-fn sub_mod(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
-    if cmp_limbs(a, b) >= 0:
-        return sub_limbs(a, b)
-    return sub_limbs(add_limbs(a, mod), b)
+fn _sub_mod(
+    a: List[UInt64], b: List[UInt64], mod: List[UInt64]
+) -> List[UInt64]:
+    if _cmp_limbs(a, b) >= 0:
+        return _sub_limbs(a, b)
+    return _sub_limbs(_add_limbs(a, mod), b)
 
 
-fn mod_mul(a: List[UInt64], b: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
-    return mod_reduce(mul_limbs(a, b), mod)
+fn _mod_mul(
+    a: List[UInt64], b: List[UInt64], mod: List[UInt64]
+) -> List[UInt64]:
+    return _mod_reduce(_mul_limbs(a, b), mod)
 
 
-fn mod_inv(a: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
+fn _mod_inv(a: List[UInt64], mod: List[UInt64]) -> List[UInt64]:
     var two = List[UInt64]()
     two.append(2)
-    var exp = sub_limbs(mod.copy(), two)
+    var exp = _sub_limbs(mod.copy(), two)
     return mod_pow(a, exp, mod)

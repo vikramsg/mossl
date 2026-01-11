@@ -222,3 +222,14 @@ fn sha384_bytes(data_in: List[UInt8]) -> List[UInt8]:
             out.append(UInt8((wv >> shift3) & UInt64(0xFF)))
             j += 1
     return out^
+
+
+fn sha384(data: Span[UInt8]) raises -> InlineArray[UInt8, 48]:
+    var l = List[UInt8]()
+    for i in range(len(data)):
+        l.append(data[i])
+    var res_list = sha384_bytes(l)
+    var out = InlineArray[UInt8, 48](0)
+    for i in range(48):
+        out[i] = res_list[i]
+    return out

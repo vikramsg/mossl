@@ -1,4 +1,5 @@
 """Local HTTPS client shim that uses TLSSocket without modifying lightbug_http."""
+from collections import List
 import time
 
 from lightbug_http.address import TCPAddr
@@ -257,25 +258,38 @@ struct HTTPSClient:
 
         request.headers[HeaderKey.HOST] = request.uri.host
         request.headers["User-Agent"] = "ssl.mojo/0.1"
+        request.headers[HeaderKey.CONNECTION] = "close"
 
         var tls = connect_https(request.uri.host, port)
         var conn = TLSConnectionAdapter(tls^)
 
         var payload = encode(request.copy())
+        # Remove potential null-terminator from encode()
         while len(payload) > 0 and payload[len(payload) - 1] == byte("\0"):
             _ = payload.pop()
+
+        var payload_bytes = List[Byte](capacity=len(payload))
+        for i in range(len(payload)):
+            payload_bytes.append(payload[i])
+        while len(payload_bytes) > 0 and payload_bytes[
+            len(payload_bytes) - 1
+        ] == Byte(0):
+            _ = payload_bytes.pop()
+
         try:
-            _ = conn.write(payload)
+            _ = conn.write(Span(payload_bytes))
         except e:
             conn.teardown()
             raise e
 
+        # Read initial chunk to find headers
         var buf = Bytes(capacity=default_buffer_size)
         try:
             _ = conn.read(buf)
         except e:
             conn.teardown()
             raise e
+
         var initial = buf.copy()
         while not _has_header_terminator(initial):
             var more = Bytes(capacity=default_buffer_size)

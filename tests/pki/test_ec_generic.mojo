@@ -62,10 +62,14 @@ fn get_p256_params() -> (
     # n0_inv for P: 1
     var p_n0_inv = UInt64(1)
 
-    var one = UIntLimbs[4]()
-    one.limbs[0] = 1
+    # 1 * R mod P
+    var one_mont_p = UIntLimbs[4]()
+    one_mont_p.limbs[0] = 0x0000000000000001
+    one_mont_p.limbs[1] = 0xFFFFFFFF00000000
+    one_mont_p.limbs[2] = 0xFFFFFFFFFFFFFFFF
+    one_mont_p.limbs[3] = 0x00000000FFFFFFFE
 
-    var ctx = FieldContext[4](p_m, p_n0_inv, p_r2, one)
+    var ctx = FieldContext[4](p_m, p_n0_inv, p_r2, one_mont_p)
 
     # Constants for Order n
     # R^2 mod n
@@ -78,26 +82,35 @@ fn get_p256_params() -> (
     # n0_inv for n: 0xccd1c8aaee00bc4f
     var n_n0_inv = UInt64(0xCCD1C8AAEE00BC4F)
 
-    var scalar_ctx = FieldContext[4](n_m, n_n0_inv, n_r2, one)
+    # 1 * R mod n
+    var one_mont_n = UIntLimbs[4]()
+    one_mont_n.limbs[0] = 0x0C46353D039CDAAF
+    one_mont_n.limbs[1] = 0x4319055258E8617B
+    one_mont_n.limbs[2] = 0x0000000000000000
+    one_mont_n.limbs[3] = 0x00000000FFFFFFFF
 
-    return (gx, gy, one, ctx, scalar_ctx)
+    var scalar_ctx = FieldContext[4](n_m, n_n0_inv, n_r2, one_mont_n)
+
+    var literal_one = UIntLimbs[4]()
+    literal_one.limbs[0] = 1
+
+    return (gx, gy, literal_one, ctx, scalar_ctx)
 
 
 fn test_p256_arithmetic() raises:
     var params = get_p256_params()
     var ctx = params[3]
-    var one = params[2]
+    var literal_one = params[2]
 
     # Test mont_mul
     # Convert 1 to Mont: 1 * R^2 * R^-1 = 1 * R
-    # Wait, R2 is R^2.
-    # To get R (1 in Mont), we compute mont_mul(1, R^2)
-    var one_mont = mont_mul(one, ctx.r2, ctx.m, ctx.n0_inv)
+    # ctx.one is already 1 * R mod P
+    var one_mont = ctx.one
 
     # 1 * 1 = 1
     var res_mont = mont_mul(one_mont, one_mont, ctx.m, ctx.n0_inv)
     var res = mont_mul(
-        res_mont, one, ctx.m, ctx.n0_inv
+        res_mont, literal_one, ctx.m, ctx.n0_inv
     )  # Convert back: res_mont * 1 * R^-1 = res
 
     assert_equal(res.limbs[0], 1)
@@ -107,7 +120,7 @@ fn test_p256_arithmetic() raises:
     two.limbs[0] = 2
     var two_mont = mont_mul(two, ctx.r2, ctx.m, ctx.n0_inv)
     var four_mont = mont_mul(two_mont, two_mont, ctx.m, ctx.n0_inv)
-    var four = mont_mul(four_mont, one, ctx.m, ctx.n0_inv)
+    var four = mont_mul(four_mont, literal_one, ctx.m, ctx.n0_inv)
 
     assert_equal(four.limbs[0], 4)
 

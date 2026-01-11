@@ -51,23 +51,37 @@ struct DerReader:
         var length = self.read_len()
         var header_len = self.offset - start
         if self.offset + length > len(self.data):
-            print(
-                "ASN1 Debug: tag="
-                + hex(Int(tag))
-                + " start="
-                + String(start)
-                + " hlen="
-                + String(header_len)
-                + " length="
-                + String(length)
-                + " offset="
-                + String(self.offset)
-                + " data_len="
-                + String(len(self.data))
-            )
             raise Error("ASN1: TLV length exceeds data")
         self.offset += length
         return DerSlice(tag, start, header_len, length)
+
+
+from pki.bigint import bytes_to_bigint
+
+
+struct RSAPublicKey(Movable):
+    """A parsed RSA public key."""
+
+    var n: List[UInt64]
+    var e: List[UInt64]
+
+    fn __init__(out self, var n: List[UInt64], var e: List[UInt64]):
+        self.n = n^
+        self.e = e^
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.n = other.n^
+        self.e = other.e^
+
+
+fn parse_rsa_public_key(der: List[UInt8]) raises -> RSAPublicKey:
+    """Parses a DER-encoded RSA public key and returns an RSAPublicKey struct.
+    """
+    var reader = DerReader(der)
+    var seq = read_sequence_reader(reader)
+    var n_bytes = read_integer_bytes(seq)
+    var e_bytes = read_integer_bytes(seq)
+    return RSAPublicKey(bytes_to_bigint(n_bytes), bytes_to_bigint(e_bytes))
 
 
 fn slice_bytes(data: List[UInt8], start: Int, length: Int) -> List[UInt8]:
