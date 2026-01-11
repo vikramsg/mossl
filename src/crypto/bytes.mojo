@@ -1,6 +1,7 @@
 """Byte helpers for hex parsing and formatting."""
 from collections import List
 
+
 fn hex_nibble(ch: StringSlice) -> UInt8:
     if ch == "0":
         return UInt8(0)

@@ -9,6 +9,7 @@ from lightbug_http.io.bytes import Bytes, byte
 
 from tls.https_client import HTTPReader, _read_until_eof, _read_response
 
+
 struct MockHTTPReader(HTTPReader, Movable):
     var data: Bytes
     var read_pos: Int

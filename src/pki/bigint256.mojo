@@ -1,6 +1,7 @@
 """Minimal 256-bit big integer helpers for P-256 ECDSA."""
 from collections import List
 
+
 fn u256_from_be(bytes: List[UInt8]) -> List[UInt64]:
     var limbs = List[UInt64]()
     # Pad/truncate to 32 bytes.

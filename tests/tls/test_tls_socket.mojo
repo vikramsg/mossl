@@ -8,6 +8,7 @@ from memory import Span
 from tls.tls_socket import TLSSocket
 from tls.transport import TLSTransport
 
+
 struct DummyTransport(Movable, TLSTransport):
     fn __init__(out self):
         pass

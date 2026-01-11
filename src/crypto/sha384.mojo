@@ -1,6 +1,7 @@
 """Pure Mojo SHA-384 implementation."""
 from collections import List
 
+
 fn mask64(x: UInt128) -> UInt64:
     return UInt64(x & UInt128(0xFFFFFFFFFFFFFFFF))
 

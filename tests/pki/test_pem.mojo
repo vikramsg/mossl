@@ -3,6 +3,7 @@ from testing import assert_equal
 
 from pki.pem import parse_pem
 
+
 fn test_multiple_certs() raises:
     var data = "Some text before\n-----BEGIN CERTIFICATE-----\nCERT1\n-----END CERTIFICATE-----\nSome text between\n-----BEGIN CERTIFICATE-----\nCERT2\n-----END CERTIFICATE-----\nSome text after"
 

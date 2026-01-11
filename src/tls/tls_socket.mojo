@@ -9,6 +9,7 @@ from memory import Span
 from tls.tls13 import TLS13Client
 from tls.transport import TLSTransport
 
+
 struct SocketTransport(Movable, TLSTransport):
     var socket: Socket[TCPAddr]
 

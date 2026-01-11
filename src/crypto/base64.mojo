@@ -1,5 +1,6 @@
 from collections import List
 
+
 fn b64_char_to_val(c: StringSlice) -> Int:
     if c >= "A" and c <= "Z":
         return ord(c) - ord("A")

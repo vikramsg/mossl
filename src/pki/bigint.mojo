@@ -2,6 +2,7 @@ from collections import List
 
 from bit import count_leading_zeros
 
+
 struct BigInt(Movable):
     var limbs: List[UInt64]
 

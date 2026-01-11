@@ -3,6 +3,7 @@ from testing import assert_equal, assert_true
 
 from pki.x509 import TrustStore, load_system_trust_store
 
+
 fn test_trust_store_load_pem() raises:
     var pem = (
         "-----BEGIN CERTIFICATE-----\nTW9qbw==\n-----END CERTIFICATE-----\n"

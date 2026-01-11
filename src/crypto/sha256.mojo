@@ -1,6 +1,7 @@
 """Pure Mojo SHA-256 implementation."""
 from collections import List
 
+
 fn mask32(x: Int) -> Int:
     return x & 0xFFFFFFFF
 

@@ -3,6 +3,7 @@ from testing import assert_equal
 
 from pki.x509 import parse_certificate, verify_signature_with_issuer, to_string
 
+
 fn read_file_bytes(path: String) raises -> List[UInt8]:
     var f = open(path, "r")
     var b = f.read_bytes()
