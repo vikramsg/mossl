@@ -21,11 +21,8 @@ fn level_2(x: Int) -> Int: return level_1(x) * 2
 fn level_3(x: Int) -> Int: return level_2(x) - 3
 
 # Non-inlined version for comparison
-@ignore_builtin(id) # Prevent some auto-inlining for demonstration
 fn noinline_1(x: Int) -> Int: return x + 1
-@ignore_builtin(id)
 fn noinline_2(x: Int) -> Int: return noinline_1(x) * 2
-@ignore_builtin(id)
 fn noinline_3(x: Int) -> Int: return noinline_2(x) - 3
 
 fn main() raises:

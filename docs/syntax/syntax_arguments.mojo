@@ -1,4 +1,5 @@
 from collections import InlineArray
+
 from benchmark import run, keep
 
 # Mojo argument conventions:

@@ -1,5 +1,6 @@
-from benchmark import run, keep
 from sys import simd_width_of
+
+from benchmark import run, keep
 
 # SIMD (Single Instruction, Multiple Data) allows you to perform the same 
 # operation on multiple data elements simultaneously.
