@@ -1,6 +1,24 @@
-# Mojo Idiomatic Syntax Performance Benchmarks
+# Mojo Syntax
 
-This document provides a comprehensive overview of performance insights for Mojo-specific syntax features based on benchmarks conducted on Sunday, January 11, 2026.
+This document serves as a central reference for tracking Mojo's evolving syntax conventions and their associated performance benchmarks. It aims to provide grounded, data-driven recommendations for writing high-performance, idiomatic Mojo code.
+
+## Recommendations
+
+- **Parallelism**: Prefer `vectorize` for memory-bound SIMD operations on contiguous data; it is significantly faster than `parallelize` for small to medium workloads due to lower orchestration overhead.
+- **Argument Conventions**:
+    - Use `read` (default in `fn`) for immutable references to avoid copies.
+    - Use `mut` for mutable references (replaces `inout`).
+    - Use `var` for ownership transfer or locally mutable copies (replaces `owned`).
+- **Math**: Always prefer specialized hardware intrinsics like `math.sqrt` over general-purpose operators like `** 0.5`.
+- **Bit Manipulation**: Use the `bit` module for hardware-accelerated operations; it is orders of magnitude faster than manual bit-twiddling.
+- **Collections**: Pre-allocate `List` capacity whenever the size is known to avoid expensive reallocations. `List` with capacity is highly competitive with `InlineArray`.
+- **Compile-Time Specialization**: Use `@parameter` to evaluate variables at compile-time, allowing the compiler to generate optimized constants and specialized code paths.
+- **SIMD**: Use `simd_width_of[DType]()` to write portable code that automatically scales to the target hardware's register width.
+- **Traits**: Use `ImplicitlyCopyable` only for small, cheap-to-copy types to enable cleaner syntax; avoid it for heap-allocated types to prevent hidden performance costs.
+- **Syntactic Sugar**: Be aware that manual `for` loops with `append` currently outperform list comprehensions in performance-critical sections.
+- **Function Inlining**: Use `@always_inline` for small, frequently called helper functions to eliminate call overhead, especially in deep call stacks.
+
+---
 
 ## Verified Results Summary
 
