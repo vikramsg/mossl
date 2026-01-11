@@ -85,11 +85,12 @@ struct TLSSocket[T: TLSTransport](Movable):
     fn read(mut self, mut buf: Bytes) raises -> Int:
         if not self.handshake_ok:
             raise Error("TLSSocket.read: Handshake not complete.")
+
         var data = self.tls.read_app_data()
         while len(buf) > 0:
             _ = buf.pop()
-        for b in data:
-            buf.append(Byte(b))
+        for i in range(len(data)):
+            buf.append(Byte(data[i]))
         return len(buf)
 
     fn write(mut self, buf: Span[Byte]) raises -> Int:

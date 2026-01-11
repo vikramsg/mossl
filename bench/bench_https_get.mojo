@@ -33,8 +33,8 @@ fn test_https_get_site(url: String, expected_text: String) -> Result:
                 error_name = "text not found"
         else:
             error_name = "status " + String(res.status_code)
-    except:
-        error_name = "Exception"
+    except e:
+        error_name = "Exception: " + String(e)
     
     var end = perf_counter()
     var duration = end - start

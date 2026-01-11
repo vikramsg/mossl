@@ -100,7 +100,7 @@ struct ByteCursor:
         return out^
 
 
-struct TLS13Keys(Copyable):
+struct TLS13Keys(Copyable, ImplicitlyCopyable):
     """Container for TLS 1.3 session keys and secrets."""
 
     var client_hs_secret: InlineArray[UInt8, 32]
@@ -186,18 +186,6 @@ fn _u16_to_bytes(v: UInt16) -> InlineArray[UInt8, 2]:
     return InlineArray[UInt8, 2](UInt8(v >> 8), UInt8(v & 0xFF))
 
 
-fn random_bytes(n: Int) raises -> List[UInt8]:
-    """Generates n random bytes using OS source (Public API)."""
-    return _random_bytes(n)
-
-
-fn make_client_hello(
-    host: String, client_random: List[UInt8], client_pub: List[UInt8]
-) -> List[UInt8]:
-    """Constructs a basic TLS 1.3 ClientHello message (Public API)."""
-    return _make_client_hello(host, client_random, client_pub)
-
-
 fn _u24_to_bytes(v: Int) -> InlineArray[UInt8, 3]:
     """Converts a 24-bit integer to big-endian bytes."""
     return InlineArray[UInt8, 3](
@@ -231,6 +219,11 @@ fn _wrap_handshake(msg_type: UInt8, body: List[UInt8]) -> List[UInt8]:
     return out^
 
 
+fn random_bytes(n: Int) raises -> List[UInt8]:
+    """Generates n random bytes using OS source (Public API)."""
+    return _random_bytes(n)
+
+
 fn _random_bytes(n: Int) raises -> List[UInt8]:
     """Reads secure random bytes from /dev/urandom."""
     with open("/dev/urandom", "r") as f:
@@ -241,9 +234,11 @@ fn _read_exact[
     T: TLSTransport
 ](mut transport: T, size: Int) raises -> List[UInt8]:
     """Reads exactly N bytes from the transport."""
-    var out = List[UInt8]()
+    var out = List[UInt8](capacity=size)
+    var buf = Bytes(capacity=size)
     while len(out) < size:
-        var buf = Bytes(capacity=size - len(out))
+        while len(buf) > 0:
+            _ = buf.pop()
         var n = transport.read(buf)
         if n == 0:
             raise Error("TLS read_exact: unexpected EOF")
@@ -283,25 +278,19 @@ fn hkdf_expand_label(
 ) raises -> List[UInt8]:
     """Public wrapper for HKDF-Expand-Label returning List[UInt8]."""
     if length == 16:
-        var res = _tls13_hkdf_expand_label[16](
-            Span(secret), label, Span(context)
-        )
+        var res = _tls13_hkdf_expand_label[16](Span(secret), label, Span(context))
         var out = List[UInt8](capacity=16)
         for i in range(16):
             out.append(res[i])
         return out^
     elif length == 12:
-        var res = _tls13_hkdf_expand_label[12](
-            Span(secret), label, Span(context)
-        )
+        var res = _tls13_hkdf_expand_label[12](Span(secret), label, Span(context))
         var out = List[UInt8](capacity=12)
         for i in range(12):
             out.append(res[i])
         return out^
     elif length == 32:
-        var res = _tls13_hkdf_expand_label[32](
-            Span(secret), label, Span(context)
-        )
+        var res = _tls13_hkdf_expand_label[32](Span(secret), label, Span(context))
         var out = List[UInt8](capacity=32)
         for i in range(32):
             out.append(res[i])
@@ -311,15 +300,7 @@ fn hkdf_expand_label(
 
 
 fn _xor_iv(iv: InlineArray[UInt8, 12], seq: UInt64) -> InlineArray[UInt8, 12]:
-    """XORs a sequence number into a TLS IV for GCM nonce construction.
-
-    Args:
-        iv: The 12-byte IV base.
-        seq: The 64-bit sequence number.
-
-    Returns:
-        The 12-byte XORed result.
-    """
+    """XORs a sequence number into a TLS IV for GCM nonce construction."""
     var out = iv
     for i in range(8):
         out[11 - i] ^= UInt8((seq >> (i * 8)) & 0xFF)
@@ -327,14 +308,7 @@ fn _xor_iv(iv: InlineArray[UInt8, 12], seq: UInt64) -> InlineArray[UInt8, 12]:
 
 
 fn _build_record_aad(length: Int) -> List[UInt8]:
-    """Constructs the AAD for a TLS 1.3 encrypted record.
-
-    Args:
-        length: Total length of the encrypted record (including content type and tag).
-
-    Returns:
-        The 5-byte AAD header.
-    """
+    """Constructs the AAD for a TLS 1.3 encrypted record."""
     var aad = List[UInt8]()
     aad.append(0x17)
     aad.append(0x03)
@@ -348,16 +322,7 @@ fn _build_record_aad(length: Int) -> List[UInt8]:
 fn _make_client_hello(
     host: String, client_random: List[UInt8], client_pub: List[UInt8]
 ) -> List[UInt8]:
-    """Constructs a basic TLS 1.3 ClientHello message.
-
-    Args:
-        host: Target server hostname.
-        client_random: 32-byte random value.
-        client_pub: 32-byte public key.
-
-    Returns:
-        The full ClientHello handshake message.
-    """
+    """Constructs a basic TLS 1.3 ClientHello message (Public API)."""
     var body = List[UInt8]()
     body.append(UInt8(0x03))
     body.append(UInt8(0x03))  # legacy_version
@@ -513,21 +478,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         """Move constructor for TLS13Client."""
         self.transport = other.transport^
         self.host = other.host
-        self.keys = TLS13Keys()
-        self.keys.client_hs_secret = other.keys.client_hs_secret
-        self.keys.server_hs_secret = other.keys.server_hs_secret
-        self.keys.client_hs_key = other.keys.client_hs_key
-        self.keys.server_hs_key = other.keys.server_hs_key
-        self.keys.client_hs_iv = other.keys.client_hs_iv
-        self.keys.server_hs_iv = other.keys.server_hs_iv
-        self.keys.client_finished_key = other.keys.client_finished_key
-        self.keys.server_finished_key = other.keys.server_finished_key
-        self.keys.client_app_secret = other.keys.client_app_secret
-        self.keys.server_app_secret = other.keys.server_app_secret
-        self.keys.client_app_key = other.keys.client_app_key
-        self.keys.server_app_key = other.keys.server_app_key
-        self.keys.client_app_iv = other.keys.client_app_iv
-        self.keys.server_app_iv = other.keys.server_app_iv
+        self.keys = other.keys
         self.transcript = other.transcript^
         self.handshake_secret = other.handshake_secret
         self.shared_secret = other.shared_secret
@@ -546,21 +497,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         iv: InlineArray[UInt8, 12],
         seq: UInt64,
     ) raises -> List[UInt8]:
-        """Encrypts a TLS 1.3 record.
-
-        Args:
-            payload: The inner plaintext to encrypt.
-            content_type: The TLS content type (e.g. handshake, app data).
-            key: The 16-byte encryption key.
-            iv: The 12-byte IV base.
-            seq: The current sequence number.
-
-        Returns:
-            The full encrypted record including header and tag.
-
-        Raises:
-            Error: If encryption fails.
-        """
+        """Encrypts a TLS 1.3 record."""
         var inner = List[UInt8](capacity=len(payload) + 1)
         for i in range(len(payload)):
             inner.append(payload[i])
@@ -596,20 +533,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         iv: InlineArray[UInt8, 12],
         seq: UInt64,
     ) raises -> DecryptedRecord:
-        """Decrypts a TLS 1.3 record and returns its inner content.
-
-        Args:
-            payload: The encrypted record payload.
-            key: The 16-byte decryption key.
-            iv: The 12-byte IV base.
-            seq: The current sequence number.
-
-        Returns:
-            The decrypted content and its inner type.
-
-        Raises:
-            Error: If decryption or authentication fails.
-        """
+        """Decrypts a TLS 1.3 record."""
         if len(payload) < 16:
             raise Error("TLS decrypt: payload too short")
         var ct = List[UInt8]()
@@ -640,29 +564,14 @@ struct TLS13Client[T: TLSTransport](Movable):
         return DecryptedRecord(content^, content_type)
 
     fn read_record(mut self) raises -> TLSRecord:
-        """Reads a single record from the transport.
-
-        Returns:
-            The raw TLS record read.
-
-        Raises:
-            Error: If reading fails.
-        """
+        """Reads a single record from the transport."""
         var header = _read_exact(self.transport, 5)
         var length = Int(_bytes_to_u16(header, 3))
         var payload = _read_exact(self.transport, length)
         return TLSRecord(header[0], payload^)
 
     fn send_handshake(mut self, msg: List[UInt8], encrypt: Bool) raises:
-        """Encapsulates and sends a handshake message.
-
-        Args:
-            msg: The handshake message body.
-            encrypt: True if the record should be encrypted.
-
-        Raises:
-            Error: If sending fails.
-        """
+        """Encapsulates and sends a handshake message."""
         if encrypt:
             var record = self.encrypt_record(
                 Span(msg),
@@ -672,8 +581,6 @@ struct TLS13Client[T: TLSTransport](Movable):
                 self.hs_seq_out,
             )
             self.hs_seq_out += 1
-            from tls.tls13 import bytes_to_bytes
-
             _ = self.transport.write(Span(_bytes_to_bytes(record)))
         else:
             var out = List[UInt8](capacity=5 + len(msg))
@@ -685,9 +592,61 @@ struct TLS13Client[T: TLSTransport](Movable):
             out.append(lb[1])
             for b in msg:
                 out.append(b)
-            from tls.tls13 import bytes_to_bytes
-
             _ = self.transport.write(Span(_bytes_to_bytes(out)))
+
+    fn _derive_keys(mut self, handshake_secret: InlineArray[UInt8, 32]) raises:
+        """Derives handshake traffic keys."""
+        var empty = List[UInt8]()
+        var th_arr = sha256(self.transcript)
+
+        self.keys.client_hs_secret = _tls13_hkdf_expand_label[32](
+            Span(handshake_secret), "c hs traffic", Span(th_arr)
+        )
+        self.keys.server_hs_secret = _tls13_hkdf_expand_label[32](
+            Span(handshake_secret), "s hs traffic", Span(th_arr)
+        )
+        self.keys.client_hs_key = _tls13_hkdf_expand_label[16](
+            Span(self.keys.client_hs_secret), "key", Span(empty)
+        )
+        self.keys.server_hs_key = _tls13_hkdf_expand_label[16](
+            Span(self.keys.server_hs_secret), "key", Span(empty)
+        )
+        self.keys.client_hs_iv = _tls13_hkdf_expand_label[12](
+            Span(self.keys.client_hs_secret), "iv", Span(empty)
+        )
+        self.keys.server_hs_iv = _tls13_hkdf_expand_label[12](
+            Span(self.keys.server_hs_secret), "iv", Span(empty)
+        )
+        self.keys.client_finished_key = _tls13_hkdf_expand_label[32](
+            Span(self.keys.client_hs_secret), "finished", Span(empty)
+        )
+        self.keys.server_finished_key = _tls13_hkdf_expand_label[32](
+            Span(self.keys.server_hs_secret), "finished", Span(empty)
+        )
+
+    fn _derive_app_keys(mut self, master_secret: InlineArray[UInt8, 32]) raises:
+        """Derives application traffic keys."""
+        var empty = List[UInt8]()
+        var th_arr = sha256(self.transcript)
+
+        self.keys.client_app_secret = _tls13_hkdf_expand_label[32](
+            Span(master_secret), "c ap traffic", Span(th_arr)
+        )
+        self.keys.server_app_secret = _tls13_hkdf_expand_label[32](
+            Span(master_secret), "s ap traffic", Span(th_arr)
+        )
+        self.keys.client_app_key = _tls13_hkdf_expand_label[16](
+            Span(self.keys.client_app_secret), "key", Span(empty)
+        )
+        self.keys.server_app_key = _tls13_hkdf_expand_label[16](
+            Span(self.keys.server_app_secret), "key", Span(empty)
+        )
+        self.keys.client_app_iv = _tls13_hkdf_expand_label[12](
+            Span(self.keys.client_app_secret), "iv", Span(empty)
+        )
+        self.keys.server_app_iv = _tls13_hkdf_expand_label[12](
+            Span(self.keys.server_app_secret), "iv", Span(empty)
+        )
 
     fn perform_handshake(mut self) raises -> Bool:
         """Executes the TLS 1.3 handshake sequence."""
@@ -754,35 +713,14 @@ struct TLS13Client[T: TLSTransport](Movable):
 
         self.handshake_secret = handshake_secret
         self.shared_secret = shared_arr
-        self.keys.client_hs_secret = _tls13_hkdf_expand_label[32](
-            Span(handshake_secret), "c hs traffic", Span(th_arr)
-        )
-        self.keys.server_hs_secret = _tls13_hkdf_expand_label[32](
-            Span(handshake_secret), "s hs traffic", Span(th_arr)
-        )
-        self.keys.client_hs_key = _tls13_hkdf_expand_label[16](
-            Span(self.keys.client_hs_secret), "key", Span(empty)
-        )
-        self.keys.server_hs_key = _tls13_hkdf_expand_label[16](
-            Span(self.keys.server_hs_secret), "key", Span(empty)
-        )
-        self.keys.client_hs_iv = _tls13_hkdf_expand_label[12](
-            Span(self.keys.client_hs_secret), "iv", Span(empty)
-        )
-        self.keys.server_hs_iv = _tls13_hkdf_expand_label[12](
-            Span(self.keys.server_hs_secret), "iv", Span(empty)
-        )
-        self.keys.client_finished_key = _tls13_hkdf_expand_label[32](
-            Span(self.keys.client_hs_secret), "finished", Span(empty)
-        )
-        self.keys.server_finished_key = _tls13_hkdf_expand_label[32](
-            Span(self.keys.server_hs_secret), "finished", Span(empty)
-        )
+        self._derive_keys(handshake_secret)
 
         var handshake_buf = List[UInt8]()
         var got_finished = False
         while not got_finished:
             var r2 = self.read_record()
+            if r2.content_type == 20: # Skip ChangeCipherSpec
+                continue
             if r2.content_type != CONTENT_APPDATA:
                 continue
             var dec = self.decrypt_record(
@@ -792,6 +730,7 @@ struct TLS13Client[T: TLSTransport](Movable):
                 self.hs_seq_in,
             )
             self.hs_seq_in += 1
+            
             if dec.inner_type == CONTENT_HANDSHAKE:
                 for b in dec.content:
                     handshake_buf.append(b)
@@ -803,74 +742,92 @@ struct TLS13Client[T: TLSTransport](Movable):
                         break
                     var hbody = hc.read_bytes(hml)
                     var full = _wrap_handshake(hmt, hbody)
-                    if hmt == HS_FINISHED:
-                        got_finished = True
+                    
                     if hmt == HS_CERTIFICATE:
                         var cert_cur = ByteCursor(hbody)
-                        _ = cert_cur.read_u8()
-                        var clen = cert_cur.read_u24()
-                        var clist_cur = ByteCursor(cert_cur.read_bytes(clen))
-                        var cert_der = clist_cur.read_bytes(
-                            clist_cur.read_u24()
-                        )
-                        var parsed = parse_certificate(cert_der)
+                        var ctx_len = cert_cur.read_u8()
+                        _ = cert_cur.read_bytes(Int(ctx_len))
+                        var cert_list_len = cert_cur.read_u24()
+                        var clist_bytes = cert_cur.read_bytes(cert_list_len)
+                        var clist_cur = ByteCursor(clist_bytes)
+                        var certs = List[List[UInt8]]()
+                        while clist_cur.remaining() > 0:
+                            var c_len = clist_cur.read_u24()
+                            certs.append(clist_cur.read_bytes(c_len))
+                            var extensions_len = clist_cur.read_u16()
+                            _ = clist_cur.read_bytes(Int(extensions_len))
+                        
+                        var trust = load_trust_store()
+                        if not verify_chain(certs, trust, _string_to_bytes(self.host)):
+                            raise Error("Certificate verification failed")
+                        var parsed = parse_certificate(certs[0])
                         self.server_pubkey = parsed.public_key.copy()
-                    for b in full:
-                        self.transcript.append(b)
-                    var nb = List[UInt8]()
-                    for i in range(hc.pos, len(handshake_buf)):
-                        nb.append(handshake_buf[i])
-                    handshake_buf = nb^
-                    if got_finished:
+                        
+                    if hmt == HS_CERT_VERIFY:
+                        var cv_cur = ByteCursor(hbody)
+                        var sig_alg = cv_cur.read_u16()
+                        var sig_len = Int(cv_cur.read_u16())
+                        var sig = cv_cur.read_bytes(sig_len)
+                        
+                        var th_arr_cv = sha256(self.transcript)
+                        var padded = List[UInt8]()
+                        for _ in range(64): padded.append(0x20)
+                        var context_str = "TLS 1.3, server CertificateVerify"
+                        for i in range(len(context_str)): padded.append(ord(context_str[i]))
+                        padded.append(0)
+                        for i in range(32): padded.append(th_arr_cv[i])
+                        
+                        if sig_alg == SIG_RSA_PSS_RSAE_SHA256:
+                            if not verify_rsa_pss_sha256(self.server_pubkey, padded, sig):
+                                raise Error("RSA PSS signature failed")
+                        elif sig_alg == SIG_RSA_PKCS1_SHA256:
+                            if not verify_rsa_pkcs1v15(self.server_pubkey, padded, sig):
+                                raise Error("RSA PKCS1 signature failed")
+                        elif sig_alg == SIG_ECDSA_SECP256R1_SHA256:
+                            var ph_arr = sha256(padded)
+                            var ph = List[UInt8](capacity=32)
+                            for i in range(32): ph.append(ph_arr[i])
+                            if not verify_ecdsa_p256_hash(self.server_pubkey, ph, sig):
+                                raise Error("ECDSA P256 signature failed")
+                    
+                    if hmt == HS_FINISHED:
+                        var transcript_hash_fin = sha256(self.transcript)
+                        var expected_fin = hmac_sha256(Span(self.keys.server_finished_key), Span(transcript_hash_fin))
+                        for i in range(32):
+                            if hbody[i] != expected_fin[i]:
+                                raise Error("Server Finished mismatch")
+                        
+                        for b in full: self.transcript.append(b)
+                        
+                        var derived2 = _tls13_hkdf_expand_label[32](
+                            Span(handshake_secret), "derived", Span(sha256(Span(List[UInt8]())))
+                        )
+                        var master = hkdf_extract(Span(derived2), Span(zeros(32)))
+                        self._derive_app_keys(master)
+                        got_finished = True
                         break
 
-        th_arr = sha256(self.transcript)
-        var derived2 = _tls13_hkdf_expand_label[32](
-            Span(handshake_secret), "derived", Span(empty_h_arr)
-        )
-        var master = hkdf_extract(Span(derived2), Span(zeros32))
-        self.keys.client_app_secret = _tls13_hkdf_expand_label[32](
-            Span(master), "c ap traffic", Span(th_arr)
-        )
-        self.keys.server_app_secret = _tls13_hkdf_expand_label[32](
-            Span(master), "s ap traffic", Span(th_arr)
-        )
+                    for b in full: self.transcript.append(b)
+                    var nb = List[UInt8]()
+                    for i in range(hc.pos, len(handshake_buf)): nb.append(handshake_buf[i])
+                    handshake_buf = nb^
+                    if got_finished: break
 
-        var finished_arr = hmac_sha256(
-            self.keys.client_finished_key, Span(th_arr)
+        var transcript_hash_f = sha256(self.transcript)
+        var client_fin_verify = hmac_sha256(
+            Span(self.keys.client_finished_key), Span(transcript_hash_f)
         )
         var fin_body = List[UInt8](capacity=32)
-        for i in range(32):
-            fin_body.append(finished_arr[i])
+        for i in range(32): fin_body.append(client_fin_verify[i])
         var fin_msg = _wrap_handshake(HS_FINISHED, fin_body)
         self.send_handshake(fin_msg, True)
-        for b in fin_msg:
-            self.transcript.append(b)
+        for b in fin_msg: self.transcript.append(b)
 
-        self.keys.client_app_key = _tls13_hkdf_expand_label[16](
-            Span(self.keys.client_app_secret), "key", Span(empty)
-        )
-        self.keys.server_app_key = _tls13_hkdf_expand_label[16](
-            Span(self.keys.server_app_secret), "key", Span(empty)
-        )
-        self.keys.client_app_iv = _tls13_hkdf_expand_label[12](
-            Span(self.keys.client_app_secret), "iv", Span(empty)
-        )
-        self.keys.server_app_iv = _tls13_hkdf_expand_label[12](
-            Span(self.keys.server_app_secret), "iv", Span(empty)
-        )
         self.handshake_done = True
         return True
 
     fn write_app_data(mut self, plaintext: List[UInt8]) raises:
-        """Encrypts and sends application data.
-
-        Args:
-            plaintext: The application data to send.
-
-        Raises:
-            Error: If encryption or sending fails.
-        """
+        """Encrypts and sends application data."""
         var record = self.encrypt_record(
             Span(plaintext),
             CONTENT_APPDATA,
@@ -879,45 +836,41 @@ struct TLS13Client[T: TLSTransport](Movable):
             self.app_seq_out,
         )
         self.app_seq_out += 1
-        from tls.tls13 import bytes_to_bytes
-
         _ = self.transport.write(Span(_bytes_to_bytes(record)))
 
     fn read_app_data(mut self) raises -> List[UInt8]:
-        """Reads and decrypts application data from the transport.
-
-        Returns:
-            The decrypted application data content.
-
-        Raises:
-            Error: If reading or decryption fails.
-        """
+        """Reads and decrypts application data."""
+        var out = List[UInt8]()
         while True:
             var r = self.read_record()
-            if r.content_type != CONTENT_APPDATA:
+            
+            # Skip unencrypted legacy records (CCS=20, Alert=21, Handshake=22)
+            if r.content_type == 20 or r.content_type == 21 or r.content_type == 22:
                 continue
-            var dec = self.decrypt_record(
-                r.payload,
-                self.keys.server_app_key,
-                self.keys.server_app_iv,
-                self.app_seq_in,
-            )
-            self.app_seq_in += 1
-            var inner_type = dec.inner_type
-            if inner_type == CONTENT_APPDATA:
-                return dec.content.copy()
+                
+            if r.content_type == CONTENT_APPDATA: # 23
+                var dec = self.decrypt_record(
+                    r.payload,
+                    self.keys.server_app_key,
+                    self.keys.server_app_iv,
+                    self.app_seq_in,
+                )
+                self.app_seq_in += 1
+                if dec.inner_type == CONTENT_APPDATA:
+                    for i in range(len(dec.content)):
+                        out.append(dec.content[i])
+                    return out^
+                elif dec.inner_type == CONTENT_ALERT:
+                    return out^
+            elif r.content_type == CONTENT_ALERT:
+                 return out^
+            else:
+                continue
 
 
 fn _bytes_to_bytes(list: List[UInt8]) -> Bytes:
-    """Converts a UInt8 list to a Lightbug Bytes object.
-
-    Args:
-        list: The source list of bytes.
-
-    Returns:
-        A Bytes object containing the same data.
-    """
-    var out = Bytes(capacity=len(list))
-    for b in list:
-        out.append(Byte(b))
+    """Converts a UInt8 list to a Lightbug Bytes object."""
+    var out = Bytes()
+    for i in range(len(list)):
+        out.append(Byte(list[i]))
     return out^

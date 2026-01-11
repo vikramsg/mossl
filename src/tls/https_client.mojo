@@ -257,25 +257,30 @@ struct HTTPSClient:
 
         request.headers[HeaderKey.HOST] = request.uri.host
         request.headers["User-Agent"] = "ssl.mojo/0.1"
+        request.headers[HeaderKey.CONNECTION] = "close"
 
         var tls = connect_https(request.uri.host, port)
         var conn = TLSConnectionAdapter(tls^)
 
         var payload = encode(request.copy())
+        # Remove potential null-terminator from encode()
         while len(payload) > 0 and payload[len(payload) - 1] == byte("\0"):
             _ = payload.pop()
+            
         try:
             _ = conn.write(payload)
         except e:
             conn.teardown()
             raise e
 
+        # Read initial chunk to find headers
         var buf = Bytes(capacity=default_buffer_size)
         try:
             _ = conn.read(buf)
         except e:
             conn.teardown()
             raise e
+            
         var initial = buf.copy()
         while not _has_header_terminator(initial):
             var more = Bytes(capacity=default_buffer_size)

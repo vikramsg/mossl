@@ -2,7 +2,7 @@ from collections import List
 from testing import assert_equal
 
 from tls.tls13 import (
-    make_client_hello,
+    _make_client_hello,
     ByteCursor,
     EXT_SIG_ALGS,
     SIG_ECDSA_SECP256R1_SHA256,
@@ -59,7 +59,7 @@ fn test_client_hello_sigalgs() raises:
     var pub = List[UInt8]()
     for _ in range(32):
         pub.append(1)
-    var ch = make_client_hello("example.com", random, pub)
+    var ch = _make_client_hello("example.com", random, pub)
     var sigs = parse_sig_algs(ch)
     assert_equal(contains(sigs, SIG_ECDSA_SECP256R1_SHA256), True)
     assert_equal(contains(sigs, SIG_ECDSA_SECP384R1_SHA384), True)

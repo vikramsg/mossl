@@ -69,7 +69,9 @@ Detailed micro-benchmarks (available in `bench/crypto/`) confirm significant imp
 - **X25519**: 15x speedup (22.7k ops/sec vs 1.5k baseline).
 - **Integration**: The Mojo HTTPS client successfully handled 100% of the benchmarked sites, outperforming the Python baseline in reliability and per-request latency.
 
-### Benchmarking Infrastructure
-- Created `bench/crypto/` with micro-benchmarks for SHA-256, HMAC, AES-GCM, and X25519.
-- Provided `bench/crypto/run_bench.sh` for automated Mojo vs. Python performance comparisons.
-- Added `bench/README.md` and `bench/crypto/README.md` for documentation.
+### Debugging & Protocol Learnings (TLS 1.3)
+- **Transcript Management**: Discovered that application traffic keys must be derived from the transcript hash *up to* the server's `Finished` message, but *excluding* the message itself. Correcting this was critical to resolving `bad_record_mac` errors.
+- **CertificateVerify Padding**: Confirmed that RFC 8446 requires a specific 64-byte space padding and context string ("TLS 1.3, server CertificateVerify") to be prefixed to the transcript hash before verification.
+- **Sequence Number Synchronization**: Identified that all encrypted records (type 23) in TLS 1.3 increment the sequence number, including non-application data like `NewSessionTicket`. Failing to increment for these records causes immediate authentication failure on the next record.
+- **Legacy Record Handling**: Middleboxes often send unencrypted `ChangeCipherSpec` (type 20) records even in TLS 1.3; these must be silently ignored without incrementing any cryptographic state.
+- **Memory Safety**: Moving from manual `memcpy` to `List.extend()` and safe byte-by-byte loops in record processing improved both stability and performance.
