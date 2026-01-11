@@ -12,6 +12,7 @@ from tests.crypto.diff_utils import (
     assert_equal_bytes,
 )
 
+
 fn test_aes_gcm_diff() raises:
     var log = Logger[Level.INFO]()
     log.info("Testing AES-GCM differential with 1000 iterations...")

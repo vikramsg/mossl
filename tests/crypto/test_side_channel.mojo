@@ -1,7 +1,8 @@
 from collections import List
-from logger import Level, Logger
 from math import sqrt
 from time import perf_counter
+
+from logger import Level, Logger
 
 from crypto.bytes import constant_time_compare
 
@@ -73,11 +74,11 @@ fn test_ct_compare_timing() raises:
     log.info("T-statistic (same vs diff-at-start):", t_stat)
 
     if abs_t > 10.0:
-        log.warning(
-            "Potential timing leak detected in constant_time_compare!"
-        )
+        log.warning("Potential timing leak detected in constant_time_compare!")
     else:
-        log.info("No significant timing leak detected (within noise threshold).")
+        log.info(
+            "No significant timing leak detected (within noise threshold)."
+        )
 
 
 fn main() raises:

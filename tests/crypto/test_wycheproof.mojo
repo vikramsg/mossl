@@ -11,6 +11,7 @@ from crypto.hmac import hmac_sha256
 from crypto.sha256 import sha256
 from crypto.x25519 import x25519
 
+
 fn test_hmac_sha256_wycheproof() raises:
     var log = Logger[Level.INFO]()
     log.info("Testing HMAC-SHA256 Wycheproof...")

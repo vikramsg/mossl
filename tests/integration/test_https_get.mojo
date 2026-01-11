@@ -1,7 +1,7 @@
-from logger import Level, Logger
 from testing import assert_equal
 
 from lightbug_http import HTTPRequest, URI, to_string
+from logger import Level, Logger
 
 from tls.https_client import HTTPSClient
 

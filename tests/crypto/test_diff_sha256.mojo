@@ -7,6 +7,7 @@ from tests.crypto.diff_utils import assert_equal_bytes
 
 from crypto.sha256 import sha256
 
+
 fn test_sha256_diff() raises:
     var log = Logger[Level.INFO]()
     log.info("Testing SHA-256 differential with 1000 iterations...")

@@ -1,4 +1,3 @@
-from logger import Level, Logger
 from testing import assert_equal, assert_true
 import time
 
@@ -7,6 +6,7 @@ from lightbug_http.connection import default_buffer_size
 from lightbug_http.header import HeaderKey, Headers
 from lightbug_http.http import HTTPResponse, HTTPRequest
 from lightbug_http.io.bytes import Bytes, byte
+from logger import Level, Logger
 
 from tls.https_client import HTTPReader, _read_until_eof, _read_response
 

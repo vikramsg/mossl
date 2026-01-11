@@ -1,6 +1,7 @@
 from collections import List
-from logger import Level, Logger
 from testing import assert_true, assert_false, assert_equal
+
+from logger import Level, Logger
 
 from crypto.bytes import constant_time_compare, ct_select, ct_swap
 

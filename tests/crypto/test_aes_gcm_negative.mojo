@@ -1,11 +1,12 @@
 from collections import InlineArray
 from collections import List
-from logger import Level, Logger
 from testing import assert_false, assert_true, assert_equal
 
+from logger import Level, Logger
 from memory import Span
 
 from crypto.aes_gcm import aes_gcm_open_internal, aes_gcm_seal_internal
+
 
 fn test_aes_gcm_negative() raises:
     var log = Logger[Level.INFO]()

@@ -7,6 +7,7 @@ from tests.crypto.diff_utils import assert_equal_bytes
 
 from crypto.x25519 import x25519
 
+
 fn test_x25519_diff() raises:
     var log = Logger[Level.INFO]()
     log.info("Testing X25519 differential with 1000 iterations...")

@@ -1,6 +1,7 @@
 from collections import List
-from logger import Level, Logger
 from testing import assert_equal, assert_true
+
+from logger import Level, Logger
 
 from tls.tls13 import random_bytes
 
