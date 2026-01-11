@@ -22,7 +22,75 @@ This document provides a comprehensive overview of performance insights for Mojo
 ## Detailed Results & Insights
 
 ### 1. High-Performance Parallelism
-...
+**File:** `syntax_vectorize_parallel.mojo`
+
+| Implementation | Mean Latency (ms) |
+| :--- | :--- |
+| `vectorize` (SIMD auto-loop) | 0.001466 |
+| `parallelize` (Multi-threaded) | 0.113837 |
+
+- **Insight**: For small workloads (size 10,000), thread orchestration overhead is significant. Prefer `vectorize` for memory-bound SIMD tasks.
+
+### 2. Argument Conventions (Modern Syntax)
+**File:** `syntax_arguments.mojo` (8KB Struct)
+
+| Convention | Mean Latency (ms) |
+| :--- | :--- |
+| `read` (Reference) | 0.000591 |
+| `var` (Moved `^`) | 0.000579 |
+| `var` (Copied) | 0.000668 |
+
+- **Insight**: `read` is the modern name for immutable references (formerly `borrowed`). It is the default for `fn` arguments.
+- **Insight**: `var` is the modern name for owned/mutable arguments (formerly `owned`).
+- **Insight**: `mut` is the modern name for mutable references (formerly `inout`).
+
+### 3. Specialization with `@parameter`
+**File:** `syntax_parameter.mojo`
+
+| Implementation | Mean Latency (ms) |
+| :--- | :--- |
+| Runtime Argument | 0.001077 |
+| `@parameter` Specialization | 0.000710 |
+
+- **Insight**: Providing constant info at compile-time allows for ~34% better optimization in this loop benchmark.
+
+### 4. Math & Bit Manipulation
+**Files:** `syntax_math.mojo`, `syntax_bit.mojo`
+
+| Math Operation | Mean Latency (ms) |
+| :--- | :--- |
+| `math.sqrt` | 0.001159 |
+| `** 0.5` Operator | 0.027198 |
+
+| Bit Operation | Mean Latency (ms) |
+| :--- | :--- |
+| Bit Module (Intrinsics) | 0.00000056 |
+| Standard Manual Ops | 0.00099909 |
+
+### 5. Memory & Collections
+**Files:** `syntax_collections.mojo`, `syntax_pointers.mojo` (10k elements)
+
+| Collection (Init) | Mean Latency (ms) |
+| :--- | :--- |
+| `List` (with capacity) | 0.010224 |
+| `InlineArray` | 0.012603 |
+| `List` (no capacity) | 0.017327 |
+
+| Access Method | Mean Latency (ms) |
+| :--- | :--- |
+| `List` Indexing | 0.005230 |
+| `UnsafePointer` | 0.005301 |
+
+### 6. SIMD Vectorization
+**File:** `syntax_simd.mojo` (Float32, size 1024)
+
+| Implementation | Mean Latency (ms) |
+| :--- | :--- |
+| SIMD (width 8) | 0.000122 |
+| Scalar Loop | 0.000607 |
+
+- **Insight**: Manual SIMD yields a ~5x speedup for basic arithmetic.
+
 ### 7. Implicit Traits (Syntactic Sugar)
 **File:** `syntax_implicit_traits.mojo`
 
@@ -36,9 +104,24 @@ This document provides a comprehensive overview of performance insights for Mojo
 - **Note on Movability**: There is no `ImplicitlyMovable` trait; Mojo handles moves automatically when using the transfer operator `^` or when the compiler determines the value is no longer used.
 
 ### 8. Syntactic Sugar & Types
-...
+**Files:** `syntax_comprehension.mojo`, `syntax_optional.mojo`, `syntax_strings.mojo`
 
-### 8. Loop Unrolling
+| Initialization | Mean Latency (ms) |
+| :--- | :--- |
+| Manual Loop (`append`) | 0.001394 |
+| List Comprehension | 0.001865 |
+
+| Type Overhead | Mean Latency (ms) |
+| :--- | :--- |
+| `Optional[Int]` | 0.00000055 |
+| Raw `Int` | 0.00000062 |
+
+| String Type | Mean Latency (ms) |
+| :--- | :--- |
+| `StringLiteral` | 0.00000053 |
+| `String` | 0.00000062 |
+
+### 9. Loop Unrolling
 **File:** `syntax_unroll.mojo` (16 iterations)
 
 | Implementation | Mean Latency (ms) |
@@ -46,7 +129,7 @@ This document provides a comprehensive overview of performance insights for Mojo
 | `@unroll` | 0.00000052 |
 | No Unroll | 0.00000050 |
 
-### 9. Always Inline
+### 10. Always Inline
 **File:** `syntax_always_inline.mojo` (3 levels)
 
 | Implementation | Mean Latency (ms) |
