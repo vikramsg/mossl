@@ -17,6 +17,17 @@ We follow the following process for coding:
 5. Run the unit test and trace test and ensure it passes.
 6. If the tests fail, fix the implementation and repeat the process.
 7. If the tests pass, move on to the next operation.
+8. Always add docstrings to all important functions and traits.
+    - Always add a code comment when a non-obvious decision was made.
+
+### Breaking loops
+
+1. When you are unsure about syntax, instead of creating changes and running and failing repeatedly, do this:
+    - Create docs/syntax/syntax_tests.mojo
+    - Break down the problem into small testable bits, add to the script and test.
+    - Only once that you are sure it will work, add it to the main code. 
+    - Add to docs/syntax/notes.md on all such findings that should be noted.
+
 
 **Important:** Only stop after successfull doing `make test-all` and `make format`. 
 
