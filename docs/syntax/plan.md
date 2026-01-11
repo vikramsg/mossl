@@ -1,16 +1,12 @@
-# Plan: Mojo Syntax Benchmarks & Modern Keyword Update
+# Plan: Mojo Implicit Traits & Documentation
 
 ## Checklist
-- [x] Create plan and initialize structure in `docs/syntax/plan.md`.
-- [x] Clone Mojo standard library repository to `/tmp/mojo_stdlib_research`.
-- [x] Search for `borrowed` keyword usage in `/tmp/mojo_stdlib_research` to verify status.
-- [x] Document research findings in `docs/research/mojo_arg_conventions.md`.
-- [ ] Update `docs/syntax/syntax_arguments.mojo` with `read`, `mut`, and `var` usage.
-- [ ] Update `docs/syntax/README.md` with verified terminology (`read` instead of `borrowed`).
-- [ ] Run benchmarks for `docs/syntax/syntax_arguments.mojo` and capture output.
-- [ ] Final check: Ensure all changes are within `docs/`.
-- [ ] Run `make format`.
+- [x] Research `ImplicitlyCopyable` and `ImplicitlyMovable` in Mojo stdlib.
+- [ ] Create `docs/syntax/syntax_implicit_traits.mojo` to demonstrate `ImplicitlyCopyable`.
+- [ ] Update `docs/syntax/README.md` with idiomatic usage of `ImplicitlyCopyable`.
+- [ ] Run benchmarks for `docs/syntax/syntax_implicit_traits.mojo`.
+- [ ] Final review and formatting.
 
 ## Notes
-- **Keyword Update**: Replace `borrowed` with `read` (or implicit) and `owned` with `var`.
-- **Verification**: Use `pixi run mojo docs/syntax/syntax_arguments.mojo` to confirm compilation.
+- **Research**: `ImplicitlyCopyable` exists as a marker trait. `ImplicitlyMovable` does not exist; moving is handled by the transfer operator `^` or compiler heuristics.
+- **Idiomatic Usage**: `ImplicitlyCopyable` should be used for small, cheap-to-copy types (like `Int`, `Float`) to allow them to be passed to `var` arguments without explicit `.copy()`.
