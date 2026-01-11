@@ -676,6 +676,7 @@ fn _aes_gcm_open_internal(
         tag_mojo.append(tag[i])
         calc_tag_mojo.append(calc_tag[i])
     from crypto.bytes import constant_time_compare
+
     if not constant_time_compare(tag_mojo, calc_tag_mojo):
         ctx.zeroize()
         return AESGCMOpened(List[UInt8](), False)

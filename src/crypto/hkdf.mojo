@@ -73,6 +73,7 @@ fn hkdf_extract_sha384(
 ) raises -> InlineArray[UInt8, 48]:
     """Performs HKDF extraction using SHA-384."""
     from crypto.hmac import hmac_sha384
+
     if len(salt) == 0:
         var zeros = InlineArray[UInt8, 48](0)
         return hmac_sha384(Span(zeros), ikm)

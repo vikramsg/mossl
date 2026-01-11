@@ -444,7 +444,7 @@ fn verify_generic[
 
     # Convert s to mont: s * R mod n
     var s_mont = _mont_mul(s, scalar_ctx.r2, scalar_ctx.m, scalar_ctx.n0_inv)
-    
+
     # s^-1 in mont form (already uses scalar_ctx.one which is R mod n)
     var w_mont = _mont_pow(
         s_mont, n_minus_2, scalar_ctx.m, scalar_ctx.n0_inv, scalar_ctx.one

@@ -60,6 +60,7 @@ fn hmac_sha384(
     var block_size = 128
     var k = List[UInt8]()
     from crypto.sha384 import sha384
+
     if len(key) > block_size:
         var k_tmp = sha384(key)
         for i in range(48):

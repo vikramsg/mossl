@@ -266,7 +266,7 @@ struct HTTPSClient:
         # Remove potential null-terminator from encode()
         while len(payload) > 0 and payload[len(payload) - 1] == byte("\0"):
             _ = payload.pop()
-            
+
         try:
             _ = conn.write(payload)
         except e:
@@ -280,7 +280,7 @@ struct HTTPSClient:
         except e:
             conn.teardown()
             raise e
-            
+
         var initial = buf.copy()
         while not _has_header_terminator(initial):
             var more = Bytes(capacity=default_buffer_size)
