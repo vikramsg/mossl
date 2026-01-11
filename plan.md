@@ -15,7 +15,8 @@
 - [x] Execute `docs/syntax/syntax_strings.mojo` and capture results.
 - [x] Execute `docs/syntax/syntax_unroll.mojo` and capture results.
 - [x] Execute `docs/syntax/syntax_vectorize_parallel.mojo` and capture results.
-- [ ] Update `docs/syntax/README.md` with **real** verified benchmark data.
+- [x] Update `docs/syntax/README.md` with **real** verified benchmark data.
+- [x] Add detailed tables for ALL benchmarks in `docs/syntax/README.md`.
 - [ ] Final review: Ensure all code comments and notes meet the user's requirements.
 - [ ] Run `make format`.
 
