@@ -2,6 +2,9 @@
 
 from collections import List
 
+from crypto.sha256 import sha256
+from crypto.sha384 import sha384_bytes
+
 from pki.asn1 import (
     parse_rsa_public_key,
     DerReader,
@@ -9,10 +12,6 @@ from pki.asn1 import (
     read_bit_string,
     read_integer_bytes,
 )
-
-from crypto.sha256 import sha256
-from crypto.sha384 import sha384_bytes
-
 from pki.bigint import (
     BigInt,
     mod_pow,
@@ -163,7 +162,7 @@ fn verify_rsa_pkcs1v15(
     return False
 
 
-fn mgf1_sha256(seed: List[UInt8], out_len: Int) -> List[UInt8]:
+fn mgf1_sha256(seed: List[UInt8], out_len: Int) raises -> List[UInt8]:
     """MGF1 mask generation function based on SHA-256."""
     var out = List[UInt8]()
     var counter = UInt32(0)

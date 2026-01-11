@@ -76,7 +76,9 @@ fn test_rfc8448_server_handshake_record() raises:
     for j in range(16):
         tag_arr[j] = tag[j]
 
-    var opened = aes_gcm_open_internal(Span(key), Span(nonce), Span(aad), Span(ct), tag_arr)
+    var opened = aes_gcm_open_internal(
+        Span(key), Span(nonce), Span(aad), Span(ct), tag_arr
+    )
     assert_equal(opened.success, True)
     var inner = opened.plaintext.copy()
     var stripped = strip_inner_plaintext(inner)

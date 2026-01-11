@@ -11,6 +11,15 @@ from crypto.hmac import hmac_sha256
 fn hkdf_extract(
     salt: Span[UInt8], ikm: Span[UInt8]
 ) raises -> InlineArray[UInt8, 32]:
+    """Performs HKDF extraction (RFC 5869).
+
+    Args:
+        salt: Optional salt value (a non-secret random value).
+        ikm: Input keying material.
+
+    Returns:
+        The pseudorandom key (PRK).
+    """
     if len(salt) == 0:
         var zeros = InlineArray[UInt8, 32](0)
         return hmac_sha256(zeros, ikm)
@@ -20,6 +29,16 @@ fn hkdf_extract(
 fn hkdf_expand(
     prk: Span[UInt8], info: Span[UInt8], length: Int
 ) raises -> List[UInt8]:
+    """Performs HKDF expansion (RFC 5869).
+
+    Args:
+        prk: Pseudorandom key of at least HashLen octets.
+        info: Optional context and application specific information.
+        length: Length of output keying material in octets.
+
+    Returns:
+        The output keying material (OKM).
+    """
     var hash_len = 32
     var n = (length + hash_len - 1) // hash_len
     var t_prev = List[UInt8]()
@@ -50,19 +69,17 @@ fn hkdf_expand(
 
 
 # Compatibility shims (deprecated)
-fn hkdf_extract(salt: List[UInt8], ikm: List[UInt8]) -> List[UInt8]:
-    try:
-        var prk = hkdf_extract(Span(salt), Span(ikm))
-        var out = List[UInt8](capacity=32)
-        for i in range(32):
-            out.append(prk[i])
-        return out^
-    except:
-        return List[UInt8]()
+fn hkdf_extract(salt: List[UInt8], ikm: List[UInt8]) raises -> List[UInt8]:
+    """Compatibility shim returning List[UInt8]."""
+    var prk = hkdf_extract(Span(salt), Span(ikm))
+    var out = List[UInt8](capacity=32)
+    for i in range(32):
+        out.append(prk[i])
+    return out^
 
 
-fn hkdf_expand(prk: List[UInt8], info: List[UInt8], length: Int) -> List[UInt8]:
-    try:
-        return hkdf_expand(Span(prk), Span(info), length)
-    except:
-        return List[UInt8]()
+fn hkdf_expand(
+    prk: List[UInt8], info: List[UInt8], length: Int
+) raises -> List[UInt8]:
+    """Compatibility shim for hkdf_expand."""
+    return hkdf_expand(Span(prk), Span(info), length)

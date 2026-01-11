@@ -1,9 +1,10 @@
+from collections import InlineArray
 from collections import List
 from testing import assert_false, assert_true, assert_equal
 
-from crypto.aes_gcm import aes_gcm_open_internal, aes_gcm_seal_internal
 from memory import Span
-from collections import InlineArray
+
+from crypto.aes_gcm import aes_gcm_open_internal, aes_gcm_seal_internal
 
 
 fn test_aes_gcm_negative() raises:
@@ -24,24 +25,32 @@ fn test_aes_gcm_negative() raises:
     # 1. Corrupt tag
     var bad_tag = tag
     bad_tag[0] ^= 1
-    var res = aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(ct), bad_tag)
+    var res = aes_gcm_open_internal(
+        Span(key), Span(iv), Span(aad), Span(ct), bad_tag
+    )
     assert_false(res.success, "Opened with corrupted tag")
 
     # 2. Corrupt ciphertext
     var bad_ct = ct.copy()
     bad_ct[0] ^= 1
-    res = aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(bad_ct), tag)
+    res = aes_gcm_open_internal(
+        Span(key), Span(iv), Span(aad), Span(bad_ct), tag
+    )
     assert_false(res.success, "Opened with corrupted ciphertext")
 
     # 3. Wrong IV
     var bad_iv = iv.copy()
     bad_iv[0] ^= 1
-    res = aes_gcm_open_internal(Span(key), Span(bad_iv), Span(aad), Span(ct), tag)
+    res = aes_gcm_open_internal(
+        Span(key), Span(bad_iv), Span(aad), Span(ct), tag
+    )
     assert_false(res.success, "Opened with wrong IV")
 
     # 4. Wrong AAD
     var bad_aad = List[UInt8](9, 9, 9)
-    res = aes_gcm_open_internal(Span(key), Span(iv), Span(bad_aad), Span(ct), tag)
+    res = aes_gcm_open_internal(
+        Span(key), Span(iv), Span(bad_aad), Span(ct), tag
+    )
     assert_false(res.success, "Opened with wrong AAD")
 
     print("AES-GCM negative tests passed!")

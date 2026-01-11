@@ -7,7 +7,7 @@ fn main() raises:
     @parameter
     fn test_string():
         var count = 0
-        for _ in range(100):
+        for _ in range(1000):
             if s_val == "hello world":
                 count += 1
         keep(count)
@@ -15,7 +15,7 @@ fn main() raises:
     @parameter
     fn test_string_literal():
         var count = 0
-        for _ in range(100):
+        for _ in range(1000):
             if sl_val == "hello world":
                 count += 1
         keep(count)

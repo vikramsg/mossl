@@ -1,9 +1,18 @@
-from benchmark import run, keep
 from collections import InlineArray
 
-@fieldwise_init
+from benchmark import run, keep
+
 struct LargeStruct(Copyable, Movable):
     var data: InlineArray[Int, 1024]
+
+    fn __init__(out self, data: InlineArray[Int, 1024]):
+        self.data = data
+
+    fn __copyinit__(out self, other: Self):
+        self.data = other.data
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.data = other.data
 
     fn copy(self) -> Self:
         return LargeStruct(self.data)
@@ -18,17 +27,17 @@ fn pass_owned(var s: LargeStruct):
 
 fn test_borrowed():
     var s = LargeStruct(InlineArray[Int, 1024](0))
-    for _ in range(100):
+    for _ in range(1000):
         pass_borrowed(s)
 
 fn test_owned_move():
-    for _ in range(100):
+    for _ in range(1000):
         var s = LargeStruct(InlineArray[Int, 1024](0))
         pass_owned(s^)
 
 fn test_owned_copy():
     var s = LargeStruct(InlineArray[Int, 1024](0))
-    for _ in range(100):
+    for _ in range(1000):
         pass_owned(s.copy())
 
 fn main() raises:

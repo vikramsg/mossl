@@ -3,20 +3,22 @@ Focuses on safe, non-allocating cryptographic operations.
 """
 
 from collections import List, InlineArray
-from crypto.aes_gcm import aes_gcm_seal_internal, aes_gcm_open_internal
-from crypto.sha256 import sha256
-from crypto.hmac import hmac_sha256
-from crypto.hkdf import hkdf_extract, hkdf_expand
-from crypto.x25519 import x25519
-from crypto.bytes import zeros
+
+from lightbug_http.io.bytes import Bytes
 from memory import Span
-from tls.transport import TLSTransport
 from pki.ecdsa_p256 import verify_ecdsa_p256_hash
 from pki.ecdsa_p384 import verify_ecdsa_p384_hash
 from pki.rsa import verify_rsa_pkcs1v15, verify_rsa_pss_sha256
 from pki.trust_store import load_trust_store
 from pki.x509 import parse_certificate, verify_chain
-from lightbug_http.io.bytes import Bytes
+
+from crypto.aes_gcm import aes_gcm_seal_internal, aes_gcm_open_internal
+from crypto.bytes import zeros
+from crypto.hkdf import hkdf_extract, hkdf_expand
+from crypto.hmac import hmac_sha256
+from crypto.sha256 import sha256
+from crypto.x25519 import x25519
+from tls.transport import TLSTransport
 
 alias TLS_VERSION = UInt16(0x0303)
 alias TLS13_VERSION = UInt16(0x0304)
@@ -224,7 +226,9 @@ fn random_bytes(n: Int) raises -> List[UInt8]:
         return f.read_bytes(n)
 
 
-fn read_exact[T: TLSTransport](mut transport: T, size: Int) raises -> List[UInt8]:
+fn read_exact[
+    T: TLSTransport
+](mut transport: T, size: Int) raises -> List[UInt8]:
     """Reads exactly N bytes from the transport."""
     var out = List[UInt8]()
     while len(out) < size:
@@ -245,9 +249,7 @@ fn hkdf_expand_label[
     """Performs HKDF-Expand-Label as defined in TLS 1.3."""
     var full_label = "tls13 " + label
     var label_bytes = string_to_bytes(full_label)
-    var info = List[UInt8](
-        capacity=2 + 1 + len(label_bytes) + 1 + len(context)
-    )
+    var info = List[UInt8](capacity=2 + 1 + len(label_bytes) + 1 + len(context))
     var len_bytes = u16_to_bytes(UInt16(target_len))
     info.append(len_bytes[0])
     info.append(len_bytes[1])
@@ -294,7 +296,15 @@ fn hkdf_expand_label(
 
 
 fn xor_iv(iv: InlineArray[UInt8, 12], seq: UInt64) -> InlineArray[UInt8, 12]:
-    """XORs a sequence number into a TLS IV for GCM nonce construction."""
+    """XORs a sequence number into a TLS IV for GCM nonce construction.
+
+    Args:
+        iv: The 12-byte IV base.
+        seq: The 64-bit sequence number.
+
+    Returns:
+        The 12-byte XORed result.
+    """
     var out = iv
     for i in range(8):
         out[11 - i] ^= UInt8((seq >> (i * 8)) & 0xFF)
@@ -302,7 +312,14 @@ fn xor_iv(iv: InlineArray[UInt8, 12], seq: UInt64) -> InlineArray[UInt8, 12]:
 
 
 fn build_record_aad(length: Int) -> List[UInt8]:
-    """Constructs the AAD for a TLS 1.3 encrypted record."""
+    """Constructs the AAD for a TLS 1.3 encrypted record.
+
+    Args:
+        length: Total length of the encrypted record (including content type and tag).
+
+    Returns:
+        The 5-byte AAD header.
+    """
     var aad = List[UInt8]()
     aad.append(0x17)
     aad.append(0x03)
@@ -316,7 +333,16 @@ fn build_record_aad(length: Int) -> List[UInt8]:
 fn make_client_hello(
     host: String, client_random: List[UInt8], client_pub: List[UInt8]
 ) -> List[UInt8]:
-    """Constructs a basic TLS 1.3 ClientHello message."""
+    """Constructs a basic TLS 1.3 ClientHello message.
+
+    Args:
+        host: Target server hostname.
+        client_random: 32-byte random value.
+        client_pub: 32-byte public key.
+
+    Returns:
+        The full ClientHello handshake message.
+    """
     var body = List[UInt8]()
     body.append(UInt8(0x03))
     body.append(UInt8(0x03))  # legacy_version
@@ -505,7 +531,21 @@ struct TLS13Client[T: TLSTransport](Movable):
         iv: InlineArray[UInt8, 12],
         seq: UInt64,
     ) raises -> List[UInt8]:
-        """Encrypts a TLS 1.3 record."""
+        """Encrypts a TLS 1.3 record.
+
+        Args:
+            payload: The inner plaintext to encrypt.
+            content_type: The TLS content type (e.g. handshake, app data).
+            key: The 16-byte encryption key.
+            iv: The 12-byte IV base.
+            seq: The current sequence number.
+
+        Returns:
+            The full encrypted record including header and tag.
+
+        Raises:
+            Error: If encryption fails.
+        """
         var inner = List[UInt8](capacity=len(payload) + 1)
         for i in range(len(payload)):
             inner.append(payload[i])
@@ -515,7 +555,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         var sealed = aes_gcm_seal_internal(
             Span(key), Span(nonce), Span(aad), Span(inner)
         )
-        var ciphertext = sealed.ciphertext
+        var ciphertext = sealed.ciphertext.copy()
         var tag = sealed.tag
 
         var body = List[UInt8](capacity=len(ciphertext) + 16)
@@ -541,7 +581,20 @@ struct TLS13Client[T: TLSTransport](Movable):
         iv: InlineArray[UInt8, 12],
         seq: UInt64,
     ) raises -> DecryptedRecord:
-        """Decrypts a TLS 1.3 record and returns its inner content."""
+        """Decrypts a TLS 1.3 record and returns its inner content.
+
+        Args:
+            payload: The encrypted record payload.
+            key: The 16-byte decryption key.
+            iv: The 12-byte IV base.
+            seq: The current sequence number.
+
+        Returns:
+            The decrypted content and its inner type.
+
+        Raises:
+            Error: If decryption or authentication fails.
+        """
         if len(payload) < 16:
             raise Error("TLS decrypt: payload too short")
         var ct = List[UInt8]()
@@ -558,7 +611,8 @@ struct TLS13Client[T: TLSTransport](Movable):
         )
         if not opened.success:
             raise Error("TLS decrypt: auth failed")
-        var pt = opened.plaintext
+        var pt = opened.plaintext.copy()
+
         var idx = len(pt) - 1
         while idx >= 0 and pt[idx] == 0:
             idx -= 1
@@ -571,14 +625,29 @@ struct TLS13Client[T: TLSTransport](Movable):
         return DecryptedRecord(content^, content_type)
 
     fn read_record(mut self) raises -> TLSRecord:
-        """Reads a single record from the transport."""
+        """Reads a single record from the transport.
+
+        Returns:
+            The raw TLS record read.
+
+        Raises:
+            Error: If reading fails.
+        """
         var header = read_exact(self.transport, 5)
         var length = Int(bytes_to_u16(header, 3))
         var payload = read_exact(self.transport, length)
         return TLSRecord(header[0], payload^)
 
     fn send_handshake(mut self, msg: List[UInt8], encrypt: Bool) raises:
-        """Encapsulates and sends a handshake message."""
+        """Encapsulates and sends a handshake message.
+
+        Args:
+            msg: The handshake message body.
+            encrypt: True if the record should be encrypted.
+
+        Raises:
+            Error: If sending fails.
+        """
         if encrypt:
             var record = self.encrypt_record(
                 Span(msg),
@@ -752,7 +821,9 @@ struct TLS13Client[T: TLSTransport](Movable):
             Span(master), "s ap traffic", Span(th_arr)
         )
 
-        var finished_arr = hmac_sha256(self.keys.client_finished_key, Span(th_arr))
+        var finished_arr = hmac_sha256(
+            self.keys.client_finished_key, Span(th_arr)
+        )
         var fin_body = List[UInt8](capacity=32)
         for i in range(32):
             fin_body.append(finished_arr[i])
@@ -777,7 +848,14 @@ struct TLS13Client[T: TLSTransport](Movable):
         return True
 
     fn write_app_data(mut self, plaintext: List[UInt8]) raises:
-        """Encrypts and sends application data."""
+        """Encrypts and sends application data.
+
+        Args:
+            plaintext: The application data to send.
+
+        Raises:
+            Error: If encryption or sending fails.
+        """
         var record = self.encrypt_record(
             Span(plaintext),
             CONTENT_APPDATA,
@@ -791,7 +869,14 @@ struct TLS13Client[T: TLSTransport](Movable):
         _ = self.transport.write(Span(bytes_to_bytes(record)))
 
     fn read_app_data(mut self) raises -> List[UInt8]:
-        """Reads and decrypts application data from the transport."""
+        """Reads and decrypts application data from the transport.
+
+        Returns:
+            The decrypted application data content.
+
+        Raises:
+            Error: If reading or decryption fails.
+        """
         while True:
             var r = self.read_record()
             if r.content_type != CONTENT_APPDATA:
@@ -803,12 +888,20 @@ struct TLS13Client[T: TLSTransport](Movable):
                 self.app_seq_in,
             )
             self.app_seq_in += 1
-            if dec.inner_type == CONTENT_APPDATA:
-                return dec.content
+            var inner_type = dec.inner_type
+            if inner_type == CONTENT_APPDATA:
+                return dec.content.copy()
 
 
 fn bytes_to_bytes(list: List[UInt8]) -> Bytes:
-    """Converts a UInt8 list to a Lightbug Bytes object."""
+    """Converts a UInt8 list to a Lightbug Bytes object.
+
+    Args:
+        list: The source list of bytes.
+
+    Returns:
+        A Bytes object containing the same data.
+    """
     var out = Bytes(capacity=len(list))
     for b in list:
         out.append(Byte(b))

@@ -1,5 +1,7 @@
+from collections import InlineArray
 from collections import List
 
+from memory import Span
 from python import Python
 
 from crypto.aes_gcm import aes_gcm_seal_internal, aes_gcm_open_internal
@@ -7,8 +9,6 @@ from crypto.bytes import hex_to_bytes, bytes_to_hex
 from crypto.hmac import hmac_sha256
 from crypto.sha256 import sha256
 from crypto.x25519 import x25519
-from memory import Span
-from collections import InlineArray
 
 
 fn test_hmac_sha256_wycheproof() raises:
@@ -95,7 +95,9 @@ fn test_aes_gcm_wycheproof() raises:
             var tag_arr = InlineArray[UInt8, 16](0)
             for k in range(min(16, len(tag))):
                 tag_arr[k] = tag[k]
-            var opened = aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(ct), tag_arr)
+            var opened = aes_gcm_open_internal(
+                Span(key), Span(iv), Span(aad), Span(ct), tag_arr
+            )
             if result == "valid" or result == "acceptable":
                 if not opened.success:
                     raise Error(
@@ -141,7 +143,10 @@ fn test_x25519_wycheproof() raises:
             var public = hex_to_bytes(public_hex)
             var private = hex_to_bytes(private_hex)
 
-            var got = x25519(private, public)
+            var got_arr = x25519(Span(private), Span(public))
+            var got = List[UInt8]()
+            for k in range(32):
+                got.append(got_arr[k])
             var got_hex = bytes_to_hex(got)
 
             if result == "valid" or result == "acceptable":

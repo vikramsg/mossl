@@ -39,7 +39,9 @@ fn test_gcm_vector_empty() raises:
     var tag = sealed.tag
 
     # 2. Mojo Open
-    var opened = aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(ct), tag)
+    var opened = aes_gcm_open_internal(
+        Span(key), Span(iv), Span(aad), Span(ct), tag
+    )
     assert_true(opened.success)
     assert_equal(len(opened.plaintext), len(pt))
 
@@ -57,7 +59,9 @@ fn test_gcm_vector_one_block() raises:
     for i in range(16):
         tag_list.append(tag[i])
     assert_equal(bytes_to_hex(tag_list), "ab6e47d42cec13bdf53a67b21257bddf")
-    var opened = aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(ct), tag)
+    var opened = aes_gcm_open_internal(
+        Span(key), Span(iv), Span(aad), Span(ct), tag
+    )
     assert_true(opened.success)
     assert_equal(
         bytes_to_hex(opened.plaintext), "00000000000000000000000000000000"
@@ -90,7 +94,9 @@ fn test_gcm_vector_with_aad() raises:
     for i in range(16):
         tag_list.append(tag[i])
     assert_equal(bytes_to_hex(tag_list), "5bc94fbc3221a5db94fae95ae7121a47")
-    var opened = aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(ct), tag)
+    var opened = aes_gcm_open_internal(
+        Span(key), Span(iv), Span(aad), Span(ct), tag
+    )
     assert_true(opened.success)
     assert_equal(bytes_to_hex(opened.plaintext), bytes_to_hex(pt))
 

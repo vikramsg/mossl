@@ -16,11 +16,11 @@ fn loop_parameter[iters: Int]():
     keep(total)
 
 fn test_runtime():
-    for _ in range(100):
+    for _ in range(1000):
         loop_runtime(100)
 
 fn test_parameter():
-    for _ in range(100):
+    for _ in range(1000):
         loop_parameter[100]()
 
 fn main() raises:

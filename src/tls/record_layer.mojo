@@ -2,9 +2,10 @@
 
 from collections import List
 
+from memory import Span
+
 from crypto.aes_gcm import aes_gcm_seal_internal
 from crypto.hkdf import hkdf_expand_label
-from memory import Span
 
 
 struct HandshakeKeys:
@@ -33,8 +34,18 @@ struct HandshakeKeys:
 
 fn derive_handshake_keys(
     secret: List[UInt8],
-) -> HandshakeKeys:
-    """Derives encryption key, IV and finished key from a handshake secret."""
+) raises -> HandshakeKeys:
+    """Derives encryption key, IV and finished key from a handshake secret.
+
+    Args:
+        secret: The handshake secret.
+
+    Returns:
+        The derived keys.
+
+    Raises:
+        Error: If key derivation fails.
+    """
     var key = hkdf_expand_label(secret, "key", List[UInt8](), 16)
     var iv = hkdf_expand_label(secret, "iv", List[UInt8](), 12)
     var finished = hkdf_expand_label(secret, "finished", List[UInt8](), 32)
@@ -89,21 +100,41 @@ struct RecordSealer:
     var seq: UInt64
 
     fn __init__(out self, in_key: List[UInt8], in_iv: List[UInt8]):
+        """Initializes the sealer with a key and IV base.
+
+        Args:
+            in_key: The 16-byte encryption key.
+            in_iv: The 12-byte IV base.
+        """
         self.key = in_key.copy()
         self.iv = in_iv.copy()
         self.seq = UInt64(0)
 
-    fn seal(mut self, aad: List[UInt8], plaintext: List[UInt8]) -> SealedRecord:
-        """Seals a record and increments the internal sequence number."""
+    fn seal(
+        mut self, aad: List[UInt8], plaintext: List[UInt8]
+    ) raises -> SealedRecord:
+        """Seals a record and increments the internal sequence number.
+
+        Args:
+            aad: Additional authenticated data.
+            plaintext: The data to encrypt and authenticate.
+
+        Returns:
+            A SealedRecord containing the ciphertext and authentication tag.
+
+        Raises:
+            Error: If encryption fails.
+        """
         var nonce = build_nonce(self.iv, self.seq)
-        try:
-            var sealed = aes_gcm_seal_internal(
-                Span(self.key), Span(nonce), Span(aad), Span(plaintext)
-            )
-            var tag_list = List[UInt8](capacity=16)
-            for i in range(16):
-                tag_list.append(sealed.tag[i])
-            self.seq += UInt64(1)
-            return SealedRecord(sealed.ciphertext^, tag_list^, nonce^)
-        except:
-            return SealedRecord(List[UInt8](), List[UInt8](), List[UInt8]())
+        var sealed = aes_gcm_seal_internal(
+            Span(self.key), Span(nonce), Span(aad), Span(plaintext)
+        )
+        var ciphertext = sealed.ciphertext.copy()
+        var tag_arr = sealed.tag
+
+        var tag_list = List[UInt8](capacity=16)
+        for i in range(16):
+            tag_list.append(tag_arr[i])
+
+        self.seq += UInt64(1)
+        return SealedRecord(ciphertext^, tag_list^, nonce^)

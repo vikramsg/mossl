@@ -12,7 +12,7 @@ fn test_https_get_site(url: String) raises:
     var req = HTTPRequest(uri)
     var res = client.do(req^)
     assert_equal(res.status_code, 200)
-    var body = to_string(res.body_raw.copy())
+    _ = to_string(res.body_raw.copy())
 
     print("Successfully tested ", url)
 

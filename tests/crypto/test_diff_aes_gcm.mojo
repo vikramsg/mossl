@@ -1,9 +1,9 @@
 from collections import List
 
+from memory import Span
 from python import Python
 
 from crypto.aes_gcm import aes_gcm_seal_internal, aes_gcm_open_internal
-from memory import Span
 
 from tests.crypto.diff_utils import (
     to_python_bytes,
@@ -46,7 +46,9 @@ fn test_aes_gcm_diff() raises:
             aad.append(UInt8(Int(aad_py[j])))
 
         # 1. Mojo Seal
-        var sealed = aes_gcm_seal_internal(Span(key), Span(iv), Span(aad), Span(pt))
+        var sealed = aes_gcm_seal_internal(
+            Span(key), Span(iv), Span(aad), Span(pt)
+        )
         var ct = sealed.ciphertext.copy()
         var tag = sealed.tag
 
@@ -69,7 +71,9 @@ fn test_aes_gcm_diff() raises:
         )
 
         # 3. Mojo Open (Round-trip)
-        var opened = aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(ct), tag)
+        var opened = aes_gcm_open_internal(
+            Span(key), Span(iv), Span(aad), Span(ct), tag
+        )
         if not opened.success:
             raise Error("AES-GCM Mojo open failed at iteration " + String(i))
 
