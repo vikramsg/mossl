@@ -3,17 +3,24 @@ from testing import assert_equal
 
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
 from crypto.hkdf import hkdf_extract
-from crypto.sha256 import sha256_bytes
+from crypto.sha256 import sha256
 from crypto.bytes import hex_to_bytes, bytes_to_hex, zeros
 from tls.tls13 import hkdf_expand_label
+from memory import Span
 
 
 fn test_rfc8448_kdf() raises:
     # RFC 8448 Section 3 key schedule values.
     var empty = List[UInt8]()
-    var empty_hash = sha256_bytes(empty)
+    var empty_hash_arr = sha256(empty)
+    var empty_hash = List[UInt8]()
+    for i in range(32):
+        empty_hash.append(empty_hash_arr[i])
     var zeros32 = zeros(32)
-    var early = hkdf_extract(List[UInt8](), zeros32)
+    var early_arr = hkdf_extract(Span(empty), Span(zeros32))
+    var early = List[UInt8]()
+    for i in range(32):
+        early.append(early_arr[i])
     assert_equal(
         bytes_to_hex(early),
         "33ad0a1c607ec03b09e6cd9893680ce210adf300aa1f2660e1b22e10f170f92a",
@@ -27,7 +34,10 @@ fn test_rfc8448_kdf() raises:
     var shared = hex_to_bytes(
         "8bd4054fb55b9d63fdfbacf9f04b9f0d35e6d63f537563efd46272900f89492d"
     )
-    var handshake = hkdf_extract(derived, shared)
+    var handshake_arr = hkdf_extract(Span(derived), Span(shared))
+    var handshake = List[UInt8]()
+    for i in range(32):
+        handshake.append(handshake_arr[i])
     assert_equal(
         bytes_to_hex(handshake),
         "1dc826e93606aa6fdc0aadc12f741b01046aa6b99f691ed221a9f0ca043fbeac",
@@ -48,7 +58,10 @@ fn test_rfc8448_kdf() raises:
     )
 
     var derived2 = hkdf_expand_label(handshake, "derived", empty_hash, 32)
-    var master = hkdf_extract(derived2, zeros32)
+    var master_arr = hkdf_extract(Span(derived2), Span(zeros32))
+    var master = List[UInt8]()
+    for i in range(32):
+        master.append(master_arr[i])
     assert_equal(
         bytes_to_hex(master),
         "18df06843d13a08bf2a449844c5f8a478001bc4d4c627984d5a41da8d0402919",

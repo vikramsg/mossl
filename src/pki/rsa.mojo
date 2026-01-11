@@ -10,12 +10,12 @@ from pki.asn1 import (
     read_integer_bytes,
 )
 
-from crypto.sha256 import sha256_bytes
+from crypto.sha256 import sha256
 from crypto.sha384 import sha384_bytes
 
 from pki.bigint import (
     BigInt,
-    bigint_pow_mod,
+    mod_pow,
     bytes_to_bigint,
     bigint_to_bytes,
     bigint_compare,
@@ -70,7 +70,7 @@ fn verify_rsa_pkcs1v15(
     var target_len = (n_obj.bit_length() + 7) // 8
 
     var s = bytes_to_bigint(sig)
-    var m_limbs = bigint_pow_mod(s, e_limbs, n_limbs)
+    var m_limbs = mod_pow(s, e_limbs, n_limbs)
     var m_bytes = BigInt(m_limbs).to_be_bytes(target_len)
 
     if len(m_bytes) < 3 or m_bytes[0] != 0x00 or m_bytes[1] != 0x01:
@@ -141,7 +141,7 @@ fn verify_rsa_pkcs1v15(
                 is_match = False
                 break
         if is_match:
-            var h = sha256_bytes(msg)
+            var h = sha256(msg)
             for i in range(32):
                 if payload[len(prefix256) + i] != h[i]:
                     return False
@@ -178,8 +178,8 @@ fn mgf1_sha256(seed: List[UInt8], out_len: Int) -> List[UInt8]:
             data.append(b)
         for b in c:
             data.append(b)
-        var h = sha256_bytes(data)
-        for i in range(len(h)):
+        var h = sha256(data)
+        for i in range(32):
             if len(out) >= out_len:
                 break
             out.append(h[i])
@@ -205,7 +205,7 @@ fn verify_rsa_pss_sha256(
         return False
 
     var s = bytes_to_bigint(sig)
-    var m_limbs = bigint_pow_mod(s, e_limbs, n_limbs)
+    var m_limbs = mod_pow(s, e_limbs, n_limbs)
     var em = BigInt(m_limbs).to_be_bytes(em_len)
     if len(em) != em_len:
         return False
@@ -255,17 +255,15 @@ fn verify_rsa_pss_sha256(
         salt.append(db[idx])
         idx += 1
 
-    var m_hash = sha256_bytes(msg)
+    var m_hash = sha256(msg)
     var m_prime = List[UInt8]()
     for _ in range(8):
         m_prime.append(0x00)
-    for b in m_hash:
-        m_prime.append(b)
+    for i in range(32):
+        m_prime.append(m_hash[i])
     for b in salt:
         m_prime.append(b)
-    var h2 = sha256_bytes(m_prime)
-    if len(h2) != h_len:
-        return False
+    var h2 = sha256(m_prime)
     for j in range(h_len):
         if h2[j] != h[j]:
             return False

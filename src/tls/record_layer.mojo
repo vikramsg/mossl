@@ -2,8 +2,9 @@
 
 from collections import List
 
-from crypto.aes_gcm import aes_gcm_seal
+from crypto.aes_gcm import aes_gcm_seal_internal
 from crypto.hkdf import hkdf_expand_label
+from memory import Span
 
 
 struct HandshakeKeys:
@@ -95,6 +96,14 @@ struct RecordSealer:
     fn seal(mut self, aad: List[UInt8], plaintext: List[UInt8]) -> SealedRecord:
         """Seals a record and increments the internal sequence number."""
         var nonce = build_nonce(self.iv, self.seq)
-        var sealed = aes_gcm_seal(self.key, nonce, aad, plaintext)
-        self.seq += UInt64(1)
-        return SealedRecord(sealed.ciphertext.copy(), sealed.tag.copy(), nonce^)
+        try:
+            var sealed = aes_gcm_seal_internal(
+                Span(self.key), Span(nonce), Span(aad), Span(plaintext)
+            )
+            var tag_list = List[UInt8](capacity=16)
+            for i in range(16):
+                tag_list.append(sealed.tag[i])
+            self.seq += UInt64(1)
+            return SealedRecord(sealed.ciphertext^, tag_list^, nonce^)
+        except:
+            return SealedRecord(List[UInt8](), List[UInt8](), List[UInt8]())

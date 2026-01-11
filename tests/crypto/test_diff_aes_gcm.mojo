@@ -2,7 +2,8 @@ from collections import List
 
 from python import Python
 
-from crypto.aes_gcm import aes_gcm_seal, aes_gcm_open
+from crypto.aes_gcm import aes_gcm_seal_internal, aes_gcm_open_internal
+from memory import Span
 
 from tests.crypto.diff_utils import (
     to_python_bytes,
@@ -45,9 +46,9 @@ fn test_aes_gcm_diff() raises:
             aad.append(UInt8(Int(aad_py[j])))
 
         # 1. Mojo Seal
-        var sealed = aes_gcm_seal(key, iv, aad, pt)
+        var sealed = aes_gcm_seal_internal(Span(key), Span(iv), Span(aad), Span(pt))
         var ct = sealed.ciphertext.copy()
-        var tag = sealed.tag.copy()
+        var tag = sealed.tag
 
         # 2. Python Seal
         var aes_py = aead.AESGCM(key_py)
@@ -60,12 +61,15 @@ fn test_aes_gcm_diff() raises:
         assert_equal_bytes(
             ct, py_ct, "AES-GCM CT mismatch at iteration " + String(i)
         )
+        var tag_list = List[UInt8]()
+        for j in range(16):
+            tag_list.append(tag[j])
         assert_equal_bytes(
-            tag, py_tag, "AES-GCM Tag mismatch at iteration " + String(i)
+            tag_list, py_tag, "AES-GCM Tag mismatch at iteration " + String(i)
         )
 
         # 3. Mojo Open (Round-trip)
-        var opened = aes_gcm_open(key, iv, aad, ct, tag)
+        var opened = aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(ct), tag)
         if not opened.success:
             raise Error("AES-GCM Mojo open failed at iteration " + String(i))
 

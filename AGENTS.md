@@ -27,6 +27,11 @@ We follow the following process for coding:
     - If the code is expected to take longer than 60 seconds, use a larger timeout.
     - This ensures if the code hangs, it will be killed and the test will fail.
 
+## Tool calls
+
+- When doing `grep` make sure to ignore `.pixi` folder.
+- Prefer always adding reasonable timeouts to tool calls.
+
 ## Mojo 
 
 ### Repo

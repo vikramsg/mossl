@@ -11,13 +11,10 @@ from crypto.hmac import hmac_sha256
 fn hkdf_extract(
     salt: Span[UInt8], ikm: Span[UInt8]
 ) raises -> InlineArray[UInt8, 32]:
-    var prk = InlineArray[UInt8, 32](0)
     if len(salt) == 0:
         var zeros = InlineArray[UInt8, 32](0)
-        hmac_sha256(zeros, ikm, prk)
-    else:
-        hmac_sha256(salt, ikm, prk)
-    return prk
+        return hmac_sha256(zeros, ikm)
+    return hmac_sha256(salt, ikm)
 
 
 fn hkdf_expand(
@@ -39,8 +36,7 @@ fn hkdf_expand(
             input.append(info[j])
         input.append(UInt8(i))
 
-        var t = InlineArray[UInt8, 32](0)
-        hmac_sha256(prk, input, t)
+        var t = hmac_sha256(prk, input)
 
         var to_copy = min(hash_len, length - wrote)
         for j in range(to_copy):

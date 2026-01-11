@@ -3,7 +3,7 @@ Uses UInt32 and rotate_bits_right for performance.
 Refactored to return the digest instead of using mut.
 """
 
-from bit import rotate_bits_right
+from bit import rotate_bits_right as _rotate_bits_right
 from collections import List, InlineArray
 from memory import Span
 

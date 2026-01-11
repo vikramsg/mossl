@@ -2,9 +2,11 @@ from collections import List
 from testing import assert_equal
 
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
-from crypto.aes_gcm import aes_gcm_open
+from crypto.aes_gcm import aes_gcm_open_internal
 from crypto.bytes import hex_to_bytes, bytes_to_hex
 from tls.record_layer import build_nonce
+from memory import Span
+from collections import InlineArray
 
 
 fn build_record_aad(length: Int) -> List[UInt8]:
@@ -70,7 +72,11 @@ fn test_rfc8448_server_handshake_record() raises:
     for j in range(len(payload) - 16, len(payload)):
         tag.append(payload[j])
 
-    var opened = aes_gcm_open(key, nonce, aad, ct, tag)
+    var tag_arr = InlineArray[UInt8, 16](0)
+    for j in range(16):
+        tag_arr[j] = tag[j]
+
+    var opened = aes_gcm_open_internal(Span(key), Span(nonce), Span(aad), Span(ct), tag_arr)
     assert_equal(opened.success, True)
     var inner = opened.plaintext.copy()
     var stripped = strip_inner_plaintext(inner)

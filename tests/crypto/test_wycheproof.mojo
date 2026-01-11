@@ -2,11 +2,13 @@ from collections import List
 
 from python import Python
 
-from crypto.aes_gcm import aes_gcm_seal, aes_gcm_open
+from crypto.aes_gcm import aes_gcm_seal_internal, aes_gcm_open_internal
 from crypto.bytes import hex_to_bytes, bytes_to_hex
 from crypto.hmac import hmac_sha256
-from crypto.sha256 import sha256_bytes
+from crypto.sha256 import sha256
 from crypto.x25519 import x25519
+from memory import Span
+from collections import InlineArray
 
 
 fn test_hmac_sha256_wycheproof() raises:
@@ -90,7 +92,10 @@ fn test_aes_gcm_wycheproof() raises:
             var result = String(test["result"])
 
             # Test Open
-            var opened = aes_gcm_open(key, iv, aad, ct, tag)
+            var tag_arr = InlineArray[UInt8, 16](0)
+            for k in range(min(16, len(tag))):
+                tag_arr[k] = tag[k]
+            var opened = aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(ct), tag_arr)
             if result == "valid" or result == "acceptable":
                 if not opened.success:
                     raise Error(
