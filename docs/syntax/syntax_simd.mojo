@@ -1,58 +1,62 @@
-from collections import List
-
 from benchmark import run, keep
+from sys import simd_width_of
+
+# SIMD (Single Instruction, Multiple Data) allows you to perform the same 
+# operation on multiple data elements simultaneously.
+#
+# Efficient SIMD usage tips:
+# 1. Use 'simd_width_of[DType]()' to auto-detect the optimal width for the current CPU.
+# 2. Prefer power-of-two widths (e.g., 8, 16, 32) that match hardware registers (AVX, NEON).
+# 3. Ensure data is contiguous in memory (like in a List or InlineArray).
+# 4. Minimize branching inside SIMD loops, as masks can be expensive.
+
+fn scalar_add(size: Int, p1: UnsafePointer[Float32], p2: UnsafePointer[Float32], res: UnsafePointer[Float32]):
+    for i in range(size):
+        res[i] = p1[i] + p2[i]
+
+fn simd_add[width: Int](size: Int, p1: UnsafePointer[Float32], p2: UnsafePointer[Float32], res: UnsafePointer[Float32]):
+    # Process 'width' elements at a time
+    for i in range(0, size, width):
+        # Load elements into a SIMD register
+        var v1 = p1.load[width=width](i)
+        var v2 = p2.load[width=width](i)
+        # Perform the addition in parallel
+        var v_res = v1 + v2
+        # Store back to memory
+        res.store(i, v_res)
 
 fn main() raises:
-    alias N = 64
-    var A = List[Float32](capacity=N*N)
-    var B = List[Float32](capacity=N*N)
-    var C = List[Float32](capacity=N*N)
-    for _ in range(N*N):
-        A.append(1.0)
-        B.append(1.0)
-        C.append(0.0)
+    alias size = 1024
+    alias width = simd_width_of[DType.float32]() * 2 # Typical width for demonstration
+    
+    var p1 = UnsafePointer[Float32].alloc(size)
+    var p2 = UnsafePointer[Float32].alloc(size)
+    var res = UnsafePointer[Float32].alloc(size)
+    
+    # Initialize data
+    for i in range(size):
+        p1[i] = 1.0
+        p2[i] = 2.0
 
     @parameter
-    fn test_scalar_matmul():
-        for i in range(N):
-            for j in range(N):
-                var acc: Float32 = 0.0
-                for k in range(N):
-                    acc += A[i*N + k] * B[k*N + j]
-                C[i*N + j] = acc
-        keep(C[0])
+    fn test_scalar():
+        scalar_add(size, p1, p2, res)
+        keep(res[0])
 
     @parameter
-    fn test_simd_matmul():
-        alias simd_width = 16
-        for i in range(N):
-            for k in range(N):
-                var aik = A[i*N + k]
-                var vaik = SIMD[DType.float32, simd_width](aik)
-                for j in range(0, N, simd_width):
-                    # Manual load of B[k*N + j : k*N + j + simd_width]
-                    var vb = SIMD[DType.float32, simd_width]()
-                    @parameter
-                    for s in range(simd_width):
-                        vb[s] = B[k*N + j + s]
-                    
-                    # Load C[i*N + j : i*N + j + simd_width]
-                    var vc = SIMD[DType.float32, simd_width]()
-                    @parameter
-                    for s in range(simd_width):
-                        vc[s] = C[i*N + j + s]
-                    
-                    vc += vaik * vb
-                    
-                    # Store back to C
-                    @parameter
-                    for s in range(simd_width):
-                        C[i*N + j + s] = vc[s]
-        keep(C[0])
+    fn test_simd():
+        simd_add[width](size, p1, p2, res)
+        keep(res[0])
 
-    print("--- SIMD Matrix Multiply (64x64) ---")
-    var report_scalar = run[test_scalar_matmul](max_runtime_secs=0.5)
-    print("Scalar Matmul:    Mean:", report_scalar.mean("ms"), "ms")
+    print("--- SIMD vs Scalar Addition (Float32, size 1024) ---")
+    print("Detected SIMD width for Float32:", simd_width_of[DType.float32]())
+    
+    var report_scalar = run[test_scalar](max_runtime_secs=0.5)
+    print("Scalar: Mean:", report_scalar.mean("ms"), "ms")
 
-    var report_simd = run[test_simd_matmul](max_runtime_secs=0.5)
-    print("SIMD (16) Matmul: Mean:", report_simd.mean("ms"), "ms")
+    var report_simd = run[test_simd](max_runtime_secs=0.5)
+    print("SIMD (width", width, "): Mean:", report_simd.mean("ms"), "ms")
+    
+    p1.free()
+    p2.free()
+    res.free()
