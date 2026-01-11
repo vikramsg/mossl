@@ -37,18 +37,18 @@ fn hmac_sha256(
 
     # Inner hash: sha256(i_key || data)
     var inner_data = List[UInt8](capacity=64 + len(data))
-    inner_data.resize(64 + len(data), 0)
-    from memory import memcpy
-    memcpy(inner_data.unsafe_ptr(), i_key.unsafe_ptr(), 64)
-    memcpy(inner_data.unsafe_ptr() + 64, data.unsafe_ptr(), len(data))
+    for i in range(64):
+        inner_data.append(i_key[i])
+    inner_data.extend(data)
 
     var inner_hash = sha256(inner_data)
 
     # Outer hash: sha256(o_key || inner_hash)
     var outer_data = List[UInt8](capacity=64 + 32)
-    outer_data.resize(64 + 32, 0)
-    memcpy(outer_data.unsafe_ptr(), o_key.unsafe_ptr(), 64)
-    memcpy(outer_data.unsafe_ptr() + 64, inner_hash.unsafe_ptr(), 32)
+    for i in range(64):
+        outer_data.append(o_key[i])
+    for i in range(32):
+        outer_data.append(inner_hash[i])
 
     return sha256(outer_data)
 

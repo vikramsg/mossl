@@ -565,15 +565,18 @@ fn aes_gcm_seal_internal(
     while idx < len(aad):
         var blk = UInt128(0)
         var rem = len(aad) - idx
-        for i in range(16):
-            blk <<= 8
-            if i < rem:
-                blk |= UInt128(aad[idx + i])
+        if rem >= 16:
+            # Efficiently load 16 bytes into UInt128
+            for i in range(16):
+                blk = (blk << 8) | UInt128(aad[idx + i])
+        else:
+            for i in range(rem):
+                blk = (blk << 8) | UInt128(aad[idx + i])
+            blk <<= (16 - rem) * 8
         ghash.update(blk)
         idx += 16
     var ciphertext = List[UInt8](capacity=len(plaintext))
-    for _ in range(len(plaintext)):
-        ciphertext.append(0)
+    ciphertext.resize(len(plaintext), 0)
     var counter = j0
     idx = 0
     while idx < len(plaintext):
@@ -584,12 +587,17 @@ fn aes_gcm_seal_internal(
         var ks_vec = ctx.encrypt_block(ctr_vec)
         var rem = len(plaintext) - idx
         var ct_u128 = UInt128(0)
-        for i in range(16):
-            var b = UInt8(0)
-            if i < rem:
-                b = plaintext[idx + i] ^ ks_vec[i]
+        if rem >= 16:
+            for i in range(16):
+                var b = plaintext[idx + i] ^ ks_vec[i]
                 ciphertext[idx + i] = b
-            ct_u128 = (ct_u128 << 8) | UInt128(b)
+                ct_u128 = (ct_u128 << 8) | UInt128(b)
+        else:
+            for i in range(rem):
+                var b = plaintext[idx + i] ^ ks_vec[i]
+                ciphertext[idx + i] = b
+                ct_u128 = (ct_u128 << 8) | UInt128(b)
+            ct_u128 <<= (16 - rem) * 8
         ghash.update(ct_u128)
         idx += 16
     ghash.update((UInt128(len(aad)) * 8) << 64 | (UInt128(len(plaintext)) * 8))
@@ -662,20 +670,26 @@ fn aes_gcm_open_internal(
     while idx < len(aad):
         var blk = UInt128(0)
         var rem = len(aad) - idx
-        for i in range(16):
-            blk <<= 8
-            if i < rem:
-                blk |= UInt128(aad[idx + i])
+        if rem >= 16:
+            for i in range(16):
+                blk = (blk << 8) | UInt128(aad[idx + i])
+        else:
+            for i in range(rem):
+                blk = (blk << 8) | UInt128(aad[idx + i])
+            blk <<= (16 - rem) * 8
         ghash.update(blk)
         idx += 16
     idx = 0
     while idx < len(ciphertext):
         var blk = UInt128(0)
         var rem = len(ciphertext) - idx
-        for i in range(16):
-            blk <<= 8
-            if i < rem:
-                blk |= UInt128(ciphertext[idx + i])
+        if rem >= 16:
+            for i in range(16):
+                blk = (blk << 8) | UInt128(ciphertext[idx + i])
+        else:
+            for i in range(rem):
+                blk = (blk << 8) | UInt128(ciphertext[idx + i])
+            blk <<= (16 - rem) * 8
         ghash.update(blk)
         idx += 16
     ghash.update((UInt128(len(aad)) * 8) << 64 | (UInt128(len(ciphertext)) * 8))
@@ -695,8 +709,7 @@ fn aes_gcm_open_internal(
         ctx.zeroize()
         return AESGCMOpened(List[UInt8](), False)
     var plaintext = List[UInt8](capacity=len(ciphertext))
-    for _ in range(len(ciphertext)):
-        plaintext.append(0)
+    plaintext.resize(len(ciphertext), 0)
     var counter = j0
     idx = 0
     while idx < len(ciphertext):
@@ -706,8 +719,11 @@ fn aes_gcm_open_internal(
             ctr_vec[i] = counter[i]
         var ks_vec = ctx.encrypt_block(ctr_vec)
         var rem = len(ciphertext) - idx
-        for i in range(rem):
-            if i < 16:
+        if rem >= 16:
+            for i in range(16):
+                plaintext[idx + i] = ciphertext[idx + i] ^ ks_vec[i]
+        else:
+            for i in range(rem):
                 plaintext[idx + i] = ciphertext[idx + i] ^ ks_vec[i]
         idx += 16
     ctx.zeroize()

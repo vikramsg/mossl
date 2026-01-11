@@ -41,9 +41,7 @@ fn sha256(data: Span[UInt8]) raises -> InlineArray[UInt8, 32]:
         pad_len = 0
 
     var padded = List[UInt8](capacity=msg_len + 1 + pad_len + 8)
-    padded.resize(msg_len, 0)
-    from memory import memcpy
-    memcpy(padded.unsafe_ptr(), data.unsafe_ptr(), msg_len)
+    padded.extend(data)
     padded.append(0x80)
     for _ in range(pad_len):
         padded.append(0x00)
