@@ -1,22 +1,19 @@
+"""Traits for cryptographic primitives."""
+
 from collections import List, InlineArray
 from memory import Span
 
-# Result struct for opening an AEAD record
-@value
-struct OpenResult:
-    var success: Bool
-    var plaintext_len: Int
 
 trait AEAD:
+    """Trait for Authenticated Encryption with Associated Data algorithms."""
+
     fn seal(
         self,
         key: Span[UInt8],
         iv: Span[UInt8],
         aad: Span[UInt8],
         plaintext: Span[UInt8],
-        mut ciphertext: List[UInt8],
-        mut tag: InlineArray[UInt8, 16],
-    ) raises:
+    ) raises -> List[UInt8]: # Usually returns concatenated CT + Tag
         ...
 
     fn open(
@@ -25,20 +22,39 @@ trait AEAD:
         iv: Span[UInt8],
         aad: Span[UInt8],
         ciphertext: Span[UInt8],
-        tag: InlineArray[UInt8, 16],
-        mut plaintext: List[UInt8],
-    ) raises -> Bool:
+    ) raises -> List[UInt8]: # Returns plaintext or raises on auth failure
         ...
+
 
 trait Hash:
-    fn hash(self, data: Span[UInt8], mut digest: InlineArray[UInt8, 32]) raises:
+    """Trait for cryptographic hash functions."""
+
+    fn hash(self, data: Span[UInt8]) raises -> InlineArray[UInt8, 32]:
         ...
+
+
+struct KeyExchangeResult:
+    """Result of a key exchange operation."""
+
+    var public_key: InlineArray[UInt8, 32]
+    var private_key: InlineArray[UInt8, 32]
+
+    fn __init__(
+        out self,
+        public_key: InlineArray[UInt8, 32],
+        private_key: InlineArray[UInt8, 32],
+    ):
+        self.public_key = public_key
+        self.private_key = private_key
+
 
 trait KeyExchange:
-    fn generate_keypair(self) raises -> (InlineArray[UInt8, 32], InlineArray[UInt8, 32]):
+    """Trait for key exchange algorithms."""
+
+    fn generate_keypair(self) raises -> KeyExchangeResult:
         ...
 
-    fn compute_shared(
-        self, private: Span[UInt8], peer_public: Span[UInt8], mut shared_secret: InlineArray[UInt8, 32]
-    ) raises:
+    fn compute_shared_secret(
+        self, private_key: Span[UInt8], public_key: Span[UInt8]
+    ) raises -> InlineArray[UInt8, 32]:
         ...

@@ -46,8 +46,8 @@ fn test_aes_gcm_diff() raises:
 
         # 1. Mojo Seal
         var sealed = aes_gcm_seal(key, iv, aad, pt)
-        var ct = sealed[0]
-        var tag = sealed[1]
+        var ct = sealed.ciphertext.copy()
+        var tag = sealed.tag.copy()
 
         # 2. Python Seal
         var aes_py = aead.AESGCM(key_py)
@@ -66,12 +66,12 @@ fn test_aes_gcm_diff() raises:
 
         # 3. Mojo Open (Round-trip)
         var opened = aes_gcm_open(key, iv, aad, ct, tag)
-        if not opened[1]:
+        if not opened.success:
             raise Error("AES-GCM Mojo open failed at iteration " + String(i))
 
         # Compare opened PT with original PT
         for j in range(pt_len):
-            if opened[0][j] != pt[j]:
+            if opened.plaintext[j] != pt[j]:
                 raise Error(
                     "AES-GCM PT mismatch after Mojo open at iteration "
                     + String(i)

@@ -1,465 +1,156 @@
-"""AES-128 GCM implementation for TLS 1.3 record protection.
-Optimized using SIMD, InlineArray, and precomputed tables.
+"""Optimized Mojo AES-128 GCM implementation.
+Uses InlineArray and SIMD for maximum performance and security.
 """
 
 from builtin.dtype import DType
 from builtin.simd import SIMD
 from collections import List, InlineArray
-from sys import simd_width_of
-
-from crypto.bytes import constant_time_compare
+from crypto.bytes import constant_time_compare, zeroize
+from memory import Span
 
 alias Block16 = SIMD[DType.uint8, 16]
 
 # --- Tables ---
 
 
+@always_inline
 fn sbox() -> InlineArray[UInt8, 256]:
+    """Returns the AES S-Box table."""
     var s = InlineArray[UInt8, 256](0)
-    # Populate S-Box (copied from standard values)
-    var vals = List[UInt8](
-        0x63,
-        0x7C,
-        0x77,
-        0x7B,
-        0xF2,
-        0x6B,
-        0x6F,
-        0xC5,
-        0x30,
-        0x01,
-        0x67,
-        0x2B,
-        0xFE,
-        0xD7,
-        0xAB,
-        0x76,
-        0xCA,
-        0x82,
-        0xC9,
-        0x7D,
-        0xFA,
-        0x59,
-        0x47,
-        0xF0,
-        0xAD,
-        0xD4,
-        0xA2,
-        0xAF,
-        0x9C,
-        0xA4,
-        0x72,
-        0xC0,
-        0xB7,
-        0xFD,
-        0x93,
-        0x26,
-        0x36,
-        0x3F,
-        0xF7,
-        0xCC,
-        0x34,
-        0xA5,
-        0xE5,
-        0xF1,
-        0x71,
-        0xD8,
-        0x31,
-        0x15,
-        0x04,
-        0xC7,
-        0x23,
-        0xC3,
-        0x18,
-        0x96,
-        0x05,
-        0x9A,
-        0x07,
-        0x12,
-        0x80,
-        0xE2,
-        0xEB,
-        0x27,
-        0xB2,
-        0x75,
-        0x09,
-        0x83,
-        0x2C,
-        0x1A,
-        0x1B,
-        0x6E,
-        0x5A,
-        0xA0,
-        0x52,
-        0x3B,
-        0xD6,
-        0xB3,
-        0x29,
-        0xE3,
-        0x2F,
-        0x84,
-        0x53,
-        0xD1,
-        0x00,
-        0xED,
-        0x20,
-        0xFC,
-        0xB1,
-        0x5B,
-        0x6A,
-        0xCB,
-        0xBE,
-        0x39,
-        0x4A,
-        0x4C,
-        0x58,
-        0xCF,
-        0xD0,
-        0xEF,
-        0xAA,
-        0xFB,
-        0x43,
-        0x4D,
-        0x33,
-        0x85,
-        0x45,
-        0xF9,
-        0x02,
-        0x7F,
-        0x50,
-        0x3C,
-        0x9F,
-        0xA8,
-        0x51,
-        0xA3,
-        0x40,
-        0x8F,
-        0x92,
-        0x9D,
-        0x38,
-        0xF5,
-        0xBC,
-        0xB6,
-        0xDA,
-        0x21,
-        0x10,
-        0xFF,
-        0xF3,
-        0xD2,
-        0xCD,
-        0x0C,
-        0x13,
-        0xEC,
-        0x5F,
-        0x97,
-        0x44,
-        0x17,
-        0xC4,
-        0xA7,
-        0x7E,
-        0x3D,
-        0x64,
-        0x5D,
-        0x19,
-        0x73,
-        0x60,
-        0x81,
-        0x4F,
-        0xDC,
-        0x22,
-        0x2A,
-        0x90,
-        0x88,
-        0x46,
-        0xEE,
-        0xB8,
-        0x14,
-        0xDE,
-        0x5E,
-        0x0B,
-        0xDB,
-        0xE0,
-        0x32,
-        0x3A,
-        0x0A,
-        0x49,
-        0x06,
-        0x24,
-        0x5C,
-        0xC2,
-        0xD3,
-        0xAC,
-        0x62,
-        0x91,
-        0x95,
-        0xE4,
-        0x79,
-        0xE7,
-        0xC8,
-        0x37,
-        0x6D,
-        0x8D,
-        0xD5,
-        0x4E,
-        0xA9,
-        0x6C,
-        0x56,
-        0xF4,
-        0xEA,
-        0x65,
-        0x7A,
-        0xAE,
-        0x08,
-        0xBA,
-        0x78,
-        0x25,
-        0x2E,
-        0x1C,
-        0xA6,
-        0xB4,
-        0xC6,
-        0xE8,
-        0xDD,
-        0x74,
-        0x1F,
-        0x4B,
-        0xBD,
-        0x8B,
-        0x8A,
-        0x70,
-        0x3E,
-        0xB5,
-        0x66,
-        0x48,
-        0x03,
-        0xF6,
-        0x0E,
-        0x61,
-        0x35,
-        0x57,
-        0xB9,
-        0x86,
-        0xC1,
-        0x1D,
-        0x9E,
-        0xE1,
-        0xF8,
-        0x98,
-        0x11,
-        0x69,
-        0xD9,
-        0x8E,
-        0x94,
-        0x9B,
-        0x1E,
-        0x87,
-        0xE9,
-        0xCE,
-        0x55,
-        0x28,
-        0xDF,
-        0x8C,
-        0xA1,
-        0x89,
-        0x0D,
-        0xBF,
-        0xE6,
-        0x42,
-        0x68,
-        0x41,
-        0x99,
-        0x2D,
-        0x0F,
-        0xB0,
-        0x54,
-        0xBB,
-        0x16,
-    )
-    for i in range(256):
-        s[i] = vals[i]
+    s[0] = 0x63; s[1] = 0x7C; s[2] = 0x77; s[3] = 0x7B; s[4] = 0xF2; s[5] = 0x6B; s[6] = 0x6F; s[7] = 0xC5; s[8] = 0x30; s[9] = 0x01; s[10] = 0x67; s[11] = 0x2B; s[12] = 0xFE; s[13] = 0xD7; s[14] = 0xAB; s[15] = 0x76
+    s[16] = 0xCA; s[17] = 0x82; s[18] = 0xC9; s[19] = 0x7D; s[20] = 0xFA; s[21] = 0x59; s[22] = 0x47; s[23] = 0xF0; s[24] = 0xAD; s[25] = 0xD4; s[26] = 0xA2; s[27] = 0xAF; s[28] = 0x9C; s[29] = 0xA4; s[30] = 0x72; s[31] = 0xC0
+    s[32] = 0xB7; s[33] = 0xFD; s[34] = 0x93; s[35] = 0x26; s[36] = 0x36; s[37] = 0x3F; s[38] = 0xF7; s[39] = 0xCC; s[40] = 0x34; s[41] = 0xA5; s[42] = 0xE5; s[43] = 0xF1; s[44] = 0x71; s[45] = 0xD8; s[46] = 0x31; s[47] = 0x15
+    s[48] = 0x04; s[49] = 0xC7; s[50] = 0x23; s[51] = 0xC3; s[52] = 0x18; s[53] = 0x96; s[54] = 0x05; s[55] = 0x9A; s[56] = 0x07; s[57] = 0x12; s[58] = 0x80; s[59] = 0xE2; s[60] = 0xEB; s[61] = 0x27; s[62] = 0xB2; s[63] = 0x75
+    s[64] = 0x09; s[65] = 0x83; s[66] = 0x2C; s[67] = 0x1A; s[68] = 0x1B; s[69] = 0x6E; s[70] = 0x5A; s[71] = 0xA0; s[72] = 0x52; s[73] = 0x3B; s[74] = 0xD6; s[75] = 0xB3; s[76] = 0x29; s[77] = 0xE3; s[78] = 0x2F; s[79] = 0x84
+    s[80] = 0x53; s[81] = 0xD1; s[82] = 0x00; s[83] = 0xED; s[84] = 0x20; s[85] = 0xFC; s[86] = 0xB1; s[87] = 0x5B; s[88] = 0x6A; s[89] = 0xCB; s[90] = 0xBE; s[91] = 0x39; s[92] = 0x4A; s[93] = 0x4C; s[94] = 0x58; s[95] = 0xCF
+    s[96] = 0xD0; s[97] = 0xEF; s[98] = 0xAA; s[99] = 0xFB; s[100] = 0x43; s[101] = 0x4D; s[102] = 0x33; s[103] = 0x85; s[104] = 0x45; s[105] = 0xF9; s[106] = 0x02; s[107] = 0x7F; s[108] = 0x50; s[109] = 0x3C; s[110] = 0x9F; s[111] = 0xA8
+    s[112] = 0x51; s[113] = 0xA3; s[114] = 0x40; s[115] = 0x8F; s[116] = 0x92; s[117] = 0x9D; s[118] = 0x38; s[119] = 0xF5; s[120] = 0xBC; s[121] = 0xB6; s[122] = 0xDA; s[123] = 0x21; s[124] = 0x10; s[125] = 0xFF; s[126] = 0xF3; s[127] = 0xD2
+    s[128] = 0xCD; s[129] = 0x0C; s[130] = 0x13; s[131] = 0xEC; s[132] = 0x5F; s[133] = 0x97; s[134] = 0x44; s[135] = 0x17; s[136] = 0xC4; s[137] = 0xA7; s[138] = 0x7E; s[139] = 0x3D; s[140] = 0x64; s[141] = 0x5D; s[142] = 0x19; s[143] = 0x73
+    s[144] = 0x60; s[145] = 0x81; s[146] = 0x4F; s[147] = 0xDC; s[148] = 0x22; s[149] = 0x2A; s[150] = 0x90; s[151] = 0x88; s[152] = 0x46; s[153] = 0xEE; s[154] = 0xB8; s[155] = 0x14; s[156] = 0xDE; s[157] = 0x5E; s[158] = 0x0B; s[159] = 0xDB
+    s[160] = 0xE0; s[161] = 0x32; s[162] = 0x3A; s[163] = 0x0A; s[164] = 0x49; s[165] = 0x06; s[166] = 0x24; s[167] = 0x5C; s[168] = 0xC2; s[169] = 0xD3; s[170] = 0xAC; s[171] = 0x62; s[172] = 0x91; s[173] = 0x95; s[174] = 0xE4; s[175] = 0x79
+    s[176] = 0xE7; s[177] = 0xC8; s[178] = 0x37; s[179] = 0x6D; s[180] = 0x8D; s[181] = 0xD5; s[182] = 0x4E; s[183] = 0xA9; s[184] = 0x6C; s[185] = 0x56; s[186] = 0xF4; s[187] = 0xEA; s[188] = 0x65; s[189] = 0x7A; s[190] = 0xAE; s[191] = 0x08
+    s[192] = 0xBA; s[193] = 0x78; s[194] = 0x25; s[195] = 0x2E; s[196] = 0x1C; s[197] = 0xA6; s[198] = 0xB4; s[199] = 0xC6; s[200] = 0xE8; s[201] = 0xDD; s[202] = 0x74; s[203] = 0x1F; s[204] = 0x4B; s[205] = 0xBD; s[206] = 0x8B; s[207] = 0x8A
+    s[208] = 0x70; s[209] = 0x3E; s[210] = 0xB5; s[211] = 0x66; s[212] = 0x48; s[213] = 0x03; s[214] = 0xF6; s[215] = 0x0E; s[216] = 0x61; s[217] = 0x35; s[218] = 0x57; s[219] = 0xB9; s[220] = 0x86; s[221] = 0xC1; s[222] = 0x1D; s[223] = 0x9E
+    s[224] = 0xE1; s[225] = 0xF8; s[226] = 0x98; s[227] = 0x11; s[228] = 0x69; s[229] = 0xD9; s[230] = 0x8E; s[231] = 0x94; s[232] = 0x9B; s[233] = 0x1E; s[234] = 0x87; s[235] = 0xE9; s[236] = 0xCE; s[237] = 0x55; s[238] = 0x28; s[239] = 0xDF
+    s[240] = 0x8C; s[241] = 0xA1; s[242] = 0x89; s[243] = 0x0D; s[244] = 0xBF; s[245] = 0xE6; s[246] = 0x42; s[247] = 0x68; s[248] = 0x41; s[249] = 0x99; s[250] = 0x2D; s[251] = 0x0F; s[252] = 0xB0; s[253] = 0x54; s[254] = 0xBB; s[255] = 0x16
     return s
 
 
+@always_inline
 fn rcon() -> InlineArray[UInt8, 10]:
-    var r = InlineArray[UInt8, 10](0)
-    var vals = List[UInt8](
-        0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36
-    )
-    for i in range(10):
-        r[i] = vals[i]
-    return r
-
-
-# --- AES Context (SIMD) ---
+    """Returns the AES RCON table."""
+    return InlineArray[UInt8, 10](0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36)
 
 
 struct AESContextInline(Movable):
-    var sbox: InlineArray[UInt8, 256]
-    var rcon: InlineArray[UInt8, 10]
+    """AES-128 Encryption Context with non-allocating SIMD optimization."""
+
     var round_keys: InlineArray[Block16, 11]
+    var sbox_vecs: InlineArray[Block16, 16]
 
     fn __init__(out self, key: InlineArray[UInt8, 16]):
-        self.sbox = InlineArray[UInt8, 256](0)
-        self.rcon = InlineArray[UInt8, 10](0)
-        self.round_keys = InlineArray[Block16, 11](Block16(0))
+        """Initializes the context from a 16-byte key."""
+        self.round_keys = InlineArray[Block16, 11](fill=Block16(0))
+        self.sbox_vecs = InlineArray[Block16, 16](fill=Block16(0))
 
-        # Cache SBox & Rcon
         var s = sbox()
-        for i in range(256):
-            self.sbox[i] = s[i]
-        var r = rcon()
-        for i in range(10):
-            self.rcon[i] = r[i]
+        for i in range(16):
+            var v = Block16(0)
+            for j in range(16):
+                v[j] = s[i * 16 + j]
+            self.sbox_vecs[i] = v
 
         self._expand_key(key)
 
     fn _expand_key(mut self, key: InlineArray[UInt8, 16]):
+        """AES key expansion logic."""
+        var s = sbox()
+        var r = rcon()
         var temp_keys = InlineArray[UInt8, 176](0)
         for i in range(16):
             temp_keys[i] = key[i]
-
         var i = 16
         var rcon_idx = 0
         var temp = InlineArray[UInt8, 4](0)
-
         while i < 176:
-            temp[0] = temp_keys[i - 4]
-            temp[1] = temp_keys[i - 3]
-            temp[2] = temp_keys[i - 2]
-            temp[3] = temp_keys[i - 1]
-
+            for j in range(4):
+                temp[j] = temp_keys[i - 4 + j]
             if (i % 16) == 0:
-                # RotWord
                 var t0 = temp[0]
-                temp[0] = temp[1]
-                temp[1] = temp[2]
-                temp[2] = temp[3]
-                temp[3] = t0
-
-                # SubWord
-                temp[0] = self.sbox[Int(temp[0])]
-                temp[1] = self.sbox[Int(temp[1])]
-                temp[2] = self.sbox[Int(temp[2])]
-                temp[3] = self.sbox[Int(temp[3])]
-
-                # Rcon
-                temp[0] ^= self.rcon[rcon_idx]
+                temp[0] = s[Int(temp[1])] ^ r[rcon_idx]
+                temp[1] = s[Int(temp[2])]
+                temp[2] = s[Int(temp[3])]
+                temp[3] = s[Int(t0)]
                 rcon_idx += 1
-
             for j in range(4):
                 temp_keys[i] = temp_keys[i - 16] ^ temp[j]
                 i += 1
-
-        # Pack into SIMD
-        for r in range(11):
+        for r_idx in range(11):
             var vec = Block16(0)
             for j in range(16):
-                vec[j] = temp_keys[r * 16 + j]
-            self.round_keys[r] = vec
+                vec[j] = temp_keys[r_idx * 16 + j]
+            self.round_keys[r_idx] = vec
+
+    @always_inline
+    fn _sbox_vec(self, state: Block16) -> Block16:
+        """Vectorized constant-time S-Box lookup."""
+        var out = Block16(0)
+        var high_nibble = state >> 4
+        var low_nibble = state & 0x0F
+        for i in range(16):
+            var chunk_idx = SIMD[DType.uint8, 16](UInt8(i))
+            var mask_bool = high_nibble.eq(chunk_idx)
+            var mask = mask_bool.select(Block16(0xFF), Block16(0x00))
+            var lookups = self.sbox_vecs[i]._dynamic_shuffle(low_nibble)
+            out |= mask & lookups
+        return out
 
     fn encrypt_block(self, in_vec: Block16) -> Block16:
+        """Encrypts a single 16-byte block."""
         var state = in_vec ^ self.round_keys[0]
-
         for r in range(1, 10):
-            # SubBytes (Optimized: Direct scalar extraction and reconstruction)
-            state = Block16(
-                self.sbox[Int(state[0])],
-                self.sbox[Int(state[1])],
-                self.sbox[Int(state[2])],
-                self.sbox[Int(state[3])],
-                self.sbox[Int(state[4])],
-                self.sbox[Int(state[5])],
-                self.sbox[Int(state[6])],
-                self.sbox[Int(state[7])],
-                self.sbox[Int(state[8])],
-                self.sbox[Int(state[9])],
-                self.sbox[Int(state[10])],
-                self.sbox[Int(state[11])],
-                self.sbox[Int(state[12])],
-                self.sbox[Int(state[13])],
-                self.sbox[Int(state[14])],
-                self.sbox[Int(state[15])],
-            )
-
-            # ShiftRows (Shuffle)
-            state = state.shuffle[
-                0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11
-            ]()
-
-            # MixColumns
+            state = self._sbox_vec(state)
+            state = state.shuffle[0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11]()
             state = self._mix_columns(state)
-
-            # AddRoundKey
             state = state ^ self.round_keys[r]
-
-        # Final Round
-        state = Block16(
-            self.sbox[Int(state[0])],
-            self.sbox[Int(state[1])],
-            self.sbox[Int(state[2])],
-            self.sbox[Int(state[3])],
-            self.sbox[Int(state[4])],
-            self.sbox[Int(state[5])],
-            self.sbox[Int(state[6])],
-            self.sbox[Int(state[7])],
-            self.sbox[Int(state[8])],
-            self.sbox[Int(state[9])],
-            self.sbox[Int(state[10])],
-            self.sbox[Int(state[11])],
-            self.sbox[Int(state[12])],
-            self.sbox[Int(state[13])],
-            self.sbox[Int(state[14])],
-            self.sbox[Int(state[15])],
-        )
-
-        state = state.shuffle[
-            0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11
-        ]()
+        state = self._sbox_vec(state)
+        state = state.shuffle[0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11]()
         state = state ^ self.round_keys[10]
-
         return state
 
     @always_inline
     fn _mix_columns(self, s: Block16) -> Block16:
-        # Optimized MixColumns
-        var s1 = s.shuffle[
-            1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12
-        ]()
-        var s2 = s.shuffle[
-            2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13
-        ]()
-        var s3 = s.shuffle[
-            3, 0, 1, 2, 7, 4, 5, 6, 11, 8, 9, 10, 15, 12, 13, 14
-        ]()
-
+        """AES MixColumns vectorized implementation."""
+        var s1 = s.shuffle[1, 2, 3, 0, 5, 6, 7, 4, 9, 10, 11, 8, 13, 14, 15, 12]()
+        var s2 = s.shuffle[2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13]()
+        var s3 = s.shuffle[3, 0, 1, 2, 7, 4, 5, 6, 11, 8, 9, 10, 15, 12, 13, 14]()
         var t = s ^ s1 ^ s2 ^ s3
         var x_s0s1 = self.xtime_vec(s ^ s1)
         return s ^ t ^ x_s0s1
 
     @always_inline
     fn xtime_vec(self, v: Block16) -> Block16:
+        """Vectorized Galois field multiplication by x."""
         var high = v >> 7
         var mask = high * 27
         return (v << 1) ^ mask
 
     fn zeroize(mut self):
-        # FIXME: Why is this 11. Should include docstring
+        """Clears round keys from memory."""
         for i in range(11):
             self.round_keys[i] = Block16(0)
 
 
-# --- GHASH Context (Comb Table) ---
-
-
 struct GHASHContextInline:
+    """GHASH implementation for GCM authentication."""
+
     var m_table: InlineArray[UInt128, 4096]
     var y: UInt128
 
     fn __init__(out self, h: UInt128):
-        self.m_table = InlineArray[UInt128, 4096](0)
+        """Initializes the GHASH context."""
+        self.m_table = InlineArray[UInt128, 4096](fill=0)
         self.y = UInt128(0)
-
-        # Initialize tables (Comb method)
         var v = h
         for t_idx in range(16):
             var v_start = v
@@ -475,7 +166,6 @@ struct GHASHContextInline:
                     if lsb == 1:
                         v_curr ^= UInt128(0xE1) << 120
                 self.m_table[t_idx * 256 + b] = val
-
             for _ in range(8):
                 var lsb = v & 1
                 v >>= 1
@@ -483,423 +173,267 @@ struct GHASHContextInline:
                     v ^= UInt128(0xE1) << 120
 
     fn update(mut self, block: UInt128):
+        """Updates the GHASH state."""
         var x = self.y ^ block
         var z = UInt128(0)
         for i in range(16):
-            var shift = 120 - (i * 8)
-            var b = Int((x >> shift) & 0xFF)
+            var b = Int((x >> (120 - (i * 8))) & 0xFF)
             z ^= self.m_table[i * 256 + b]
         self.y = z
 
 
-# --- Helpers ---
-
-
-fn inc32(mut ctr: InlineArray[UInt8, 16]):
+@always_inline
+fn inc32(ctr_in: InlineArray[UInt8, 16]) -> InlineArray[UInt8, 16]:
+    """Increments the 32-bit counter part of the AES-GCM IV."""
+    var ctr = ctr_in
     var c = (
-        UInt32(ctr[15])
+        (UInt32(ctr[15])
         | (UInt32(ctr[14]) << 8)
         | (UInt32(ctr[13]) << 16)
-        | (UInt32(ctr[12]) << 24)
+        | (UInt32(ctr[12]) << 24))
+        + 1
     )
-    c += 1
     ctr[15] = UInt8(c & 0xFF)
     ctr[14] = UInt8((c >> 8) & 0xFF)
     ctr[13] = UInt8((c >> 16) & 0xFF)
     ctr[12] = UInt8((c >> 24) & 0xFF)
+    return ctr
 
 
-# --- Public API ---
+struct AESGCMSealed(Movable):
+    """Result of an AES-GCM seal operation."""
+
+    var ciphertext: List[UInt8]
+    var tag: InlineArray[UInt8, 16]
+
+    fn __init__(out self, var ciphertext: List[UInt8], tag: InlineArray[UInt8, 16]):
+        self.ciphertext = ciphertext^
+        self.tag = tag
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.ciphertext = other.ciphertext^
+        self.tag = other.tag
+
+
+struct AESGCMOpened(Movable):
+    """Result of an AES-GCM open operation."""
+
+    var plaintext: List[UInt8]
+    var success: Bool
+
+    fn __init__(out self, var plaintext: List[UInt8], success: Bool):
+        self.plaintext = plaintext^
+        self.success = success
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.plaintext = other.plaintext^
+        self.success = other.success
+
+
+fn aes_gcm_seal_internal(
+    key: Span[UInt8], iv: Span[UInt8], aad: Span[UInt8], plaintext: Span[UInt8]
+) raises -> AESGCMSealed:
+    """Internal AES-GCM seal implementation."""
+    if len(iv) == 0:
+        raise Error("AES-GCM: IV length must be > 0")
+    var key_arr = InlineArray[UInt8, 16](0)
+    for i in range(16):
+        key_arr[i] = key[i]
+    var ctx = AESContextInline(key_arr)
+    var h_block = ctx.encrypt_block(Block16(0))
+    var h128 = UInt128(0)
+    for i in range(16):
+        h128 = (h128 << 8) | UInt128(h_block[i])
+    var j0 = InlineArray[UInt8, 16](0)
+    if len(iv) == 12:
+        for i in range(12):
+            j0[i] = iv[i]
+        j0[15] = 1
+    else:
+        var ghash_iv = GHASHContextInline(h128)
+        var i_idx = 0
+        while i_idx < len(iv):
+            var blk = UInt128(0)
+            var rem = len(iv) - i_idx
+            for i in range(16):
+                blk <<= 8
+                if i < rem:
+                    blk |= UInt128(iv[i_idx + i])
+            ghash_iv.update(blk)
+            i_idx += 16
+        ghash_iv.update(UInt128(len(iv)) * 8)
+        var y = ghash_iv.y
+        for i in range(16):
+            j0[i] = UInt8((y >> ((15 - i) * 8)) & 0xFF)
+    var ghash = GHASHContextInline(h128)
+    var idx = 0
+    while idx < len(aad):
+        var blk = UInt128(0)
+        var rem = len(aad) - idx
+        for i in range(16):
+            blk <<= 8
+            if i < rem:
+                blk |= UInt128(aad[idx + i])
+        ghash.update(blk)
+        idx += 16
+    var ciphertext = List[UInt8](capacity=len(plaintext))
+    for _ in range(len(plaintext)):
+        ciphertext.append(0)
+    var counter = j0
+    idx = 0
+    while idx < len(plaintext):
+        counter = inc32(counter)
+        var ctr_vec = Block16(0)
+        for i in range(16):
+            ctr_vec[i] = counter[i]
+        var ks_vec = ctx.encrypt_block(ctr_vec)
+        var rem = len(plaintext) - idx
+        var ct_u128 = UInt128(0)
+        for i in range(16):
+            var b = UInt8(0)
+            if i < rem:
+                b = plaintext[idx + i] ^ ks_vec[i]
+                ciphertext[idx + i] = b
+            ct_u128 = (ct_u128 << 8) | UInt128(b)
+        ghash.update(ct_u128)
+        idx += 16
+    ghash.update((UInt128(len(aad)) * 8) << 64 | (UInt128(len(plaintext)) * 8))
+    var j0_vec = Block16(0)
+    for i in range(16):
+        j0_vec[i] = j0[i]
+    var ek_j0 = ctx.encrypt_block(j0_vec)
+    var tag = InlineArray[UInt8, 16](0)
+    for i in range(16):
+        tag[i] = UInt8((ghash.y >> ((15 - i) * 8)) & 0xFF) ^ ek_j0[i]
+    ctx.zeroize()
+    return AESGCMSealed(ciphertext^, tag)
+
+
+fn aes_gcm_open_internal(
+    key: Span[UInt8], iv: Span[UInt8], aad: Span[UInt8], ciphertext: Span[UInt8], tag: InlineArray[UInt8, 16]
+) raises -> AESGCMOpened:
+    """Internal AES-GCM open implementation."""
+    if len(iv) == 0:
+        return AESGCMOpened(List[UInt8](), False)
+    var key_arr = InlineArray[UInt8, 16](0)
+    for i in range(16):
+        key_arr[i] = key[i]
+    var ctx = AESContextInline(key_arr)
+    var h_block = ctx.encrypt_block(Block16(0))
+    var h128 = UInt128(0)
+    for i in range(16):
+        h128 = (h128 << 8) | UInt128(h_block[i])
+    var j0 = InlineArray[UInt8, 16](0)
+    if len(iv) == 12:
+        for i in range(12):
+            j0[i] = iv[i]
+        j0[15] = 1
+    else:
+        var ghash_iv = GHASHContextInline(h128)
+        var i_idx = 0
+        while i_idx < len(iv):
+            var blk = UInt128(0)
+            var rem = len(iv) - i_idx
+            for i in range(16):
+                blk <<= 8
+                if i < rem:
+                    blk |= UInt128(iv[i_idx + i])
+            ghash_iv.update(blk)
+            i_idx += 16
+        ghash_iv.update(UInt128(len(iv)) * 8)
+        var y = ghash_iv.y
+        for i in range(16):
+            j0[i] = UInt8((y >> ((15 - i) * 8)) & 0xFF)
+    var ghash = GHASHContextInline(h128)
+    var idx = 0
+    while idx < len(aad):
+        var blk = UInt128(0)
+        var rem = len(aad) - idx
+        for i in range(16):
+            blk <<= 8
+            if i < rem:
+                blk |= UInt128(aad[idx + i])
+        ghash.update(blk)
+        idx += 16
+    idx = 0
+    while idx < len(ciphertext):
+        var blk = UInt128(0)
+        var rem = len(ciphertext) - idx
+        for i in range(16):
+            blk <<= 8
+            if i < rem:
+                blk |= UInt128(ciphertext[idx + i])
+        ghash.update(blk)
+        idx += 16
+    ghash.update((UInt128(len(aad)) * 8) << 64 | (UInt128(len(ciphertext)) * 8))
+    var j0_vec = Block16(0)
+    for i in range(16):
+        j0_vec[i] = j0[i]
+    var ek_j0 = ctx.encrypt_block(j0_vec)
+    var calc_tag = InlineArray[UInt8, 16](0)
+    for i in range(16):
+        calc_tag[i] = UInt8((ghash.y >> ((15 - i) * 8)) & 0xFF) ^ ek_j0[i]
+    var tag_mojo = List[UInt8](capacity=16)
+    var calc_tag_mojo = List[UInt8](capacity=16)
+    for i in range(16):
+        tag_mojo.append(tag[i])
+        calc_tag_mojo.append(calc_tag[i])
+    if not constant_time_compare(tag_mojo, calc_tag_mojo):
+        ctx.zeroize()
+        return AESGCMOpened(List[UInt8](), False)
+    var plaintext = List[UInt8](capacity=len(ciphertext))
+    for _ in range(len(ciphertext)):
+        plaintext.append(0)
+    var counter = j0
+    idx = 0
+    while idx < len(ciphertext):
+        counter = inc32(counter)
+        var ctr_vec = Block16(0)
+        for i in range(16):
+            ctr_vec[i] = counter[i]
+        var ks_vec = ctx.encrypt_block(ctr_vec)
+        var rem = len(ciphertext) - idx
+        for i in range(rem):
+            if i < 16:
+                plaintext[idx + i] = ciphertext[idx + i] ^ ks_vec[i]
+        idx += 16
+    ctx.zeroize()
+    return AESGCMOpened(plaintext^, True)
+
+
+# Compatibility shims
 
 
 fn aes_encrypt_block(key: List[UInt8], block: List[UInt8]) -> List[UInt8]:
+    """Compatibility shim for block encryption."""
     var k_arr = InlineArray[UInt8, 16](0)
     for i in range(16):
         k_arr[i] = key[i]
     var ctx = AESContextInline(k_arr)
-
     var b_vec = Block16(0)
     for i in range(16):
         b_vec[i] = block[i]
-
     var out_vec = ctx.encrypt_block(b_vec)
-
     var out = List[UInt8]()
     for i in range(16):
         out.append(out_vec[i])
     return out^
 
 
-fn aes_gcm_seal(
-    key: List[UInt8], iv: List[UInt8], aad: List[UInt8], plaintext: List[UInt8]
-) -> (List[UInt8], List[UInt8]):
-    # NIST SP 800-38D: IV length must be at least 1 bit (1 byte here for simplicity).
-    if len(iv) == 0:
-        return (List[UInt8](), List[UInt8]())
-
-    # 1. Expand Key
-    var key_arr = InlineArray[UInt8, 16](0)
-    for i in range(16):
-        key_arr[i] = key[i]
-    var ctx = AESContextInline(key_arr)
-
-    # 2. H
-    var h_block = ctx.encrypt_block(Block16(0))
-    var h128 = UInt128(0)
-    for i in range(16):
-        h128 = (h128 << 8) | UInt128(h_block[i])
-
-    # 3. J0
-    var j0 = InlineArray[UInt8, 16](0)
-    if len(iv) == 12:
-        for i in range(12):
-            j0[i] = iv[i]
-        j0[15] = 1
-    else:
-        var ghash_iv = GHASHContextInline(h128)
-        var iv_len = len(iv)
-        var i_idx = 0
-        while i_idx < iv_len:
-            var blk = UInt128(0)
-            var rem = iv_len - i_idx
-            for i in range(16):
-                if i < rem:
-                    blk = (blk << 8) | UInt128(iv[i_idx + i])
-                else:
-                    blk = blk << 8
-            ghash_iv.update(blk)
-            i_idx += 16
-        var len_block = UInt128(iv_len) * 8
-        ghash_iv.update(len_block)
-        var y = ghash_iv.y
-        for i in range(16):
-            var shift = (15 - i) * 8
-            j0[i] = UInt8((y >> shift) & 0xFF)
-
-    # 4. GHASH for data
-    var ghash = GHASHContextInline(h128)
-
-    # Process AAD
-    var aad_len = len(aad)
-    var idx = 0
-    while idx < aad_len:
-        var blk = UInt128(0)
-        var rem = aad_len - idx
-        for i in range(16):
-            if i < rem:
-                blk = (blk << 8) | UInt128(aad[idx + i])
-            else:
-                blk = blk << 8
-        ghash.update(blk)
-        idx += 16
-
-    # 5. Encrypt & Process CT
-    var counter = j0
-    inc32(counter)
-
-    var pt_len = len(plaintext)
-    var res = List[UInt8](capacity=pt_len)
-
-    idx = 0
-    while idx < pt_len:
-        var ctr_vec = Block16(
-            counter[0],
-            counter[1],
-            counter[2],
-            counter[3],
-            counter[4],
-            counter[5],
-            counter[6],
-            counter[7],
-            counter[8],
-            counter[9],
-            counter[10],
-            counter[11],
-            counter[12],
-            counter[13],
-            counter[14],
-            counter[15],
-        )
-
-        var ks_vec = ctx.encrypt_block(ctr_vec)
-
-        var rem = pt_len - idx
-        var ct_u128 = UInt128(0)
-
-        if rem >= 16:
-            var pt_vec = Block16(
-                plaintext[idx],
-                plaintext[idx + 1],
-                plaintext[idx + 2],
-                plaintext[idx + 3],
-                plaintext[idx + 4],
-                plaintext[idx + 5],
-                plaintext[idx + 6],
-                plaintext[idx + 7],
-                plaintext[idx + 8],
-                plaintext[idx + 9],
-                plaintext[idx + 10],
-                plaintext[idx + 11],
-                plaintext[idx + 12],
-                plaintext[idx + 13],
-                plaintext[idx + 14],
-                plaintext[idx + 15],
-            )
-            var ct_vec = pt_vec ^ ks_vec
-
-            res.append(ct_vec[0])
-            res.append(ct_vec[1])
-            res.append(ct_vec[2])
-            res.append(ct_vec[3])
-            res.append(ct_vec[4])
-            res.append(ct_vec[5])
-            res.append(ct_vec[6])
-            res.append(ct_vec[7])
-            res.append(ct_vec[8])
-            res.append(ct_vec[9])
-            res.append(ct_vec[10])
-            res.append(ct_vec[11])
-            res.append(ct_vec[12])
-            res.append(ct_vec[13])
-            res.append(ct_vec[14])
-            res.append(ct_vec[15])
-
-            for i in range(16):
-                ct_u128 = (ct_u128 << 8) | UInt128(ct_vec[i])
-
-            ghash.update(ct_u128)
-            inc32(counter)
-            idx += 16
-        else:
-            for i in range(rem):
-                var b = plaintext[idx + i] ^ ks_vec[i]
-                res.append(b)
-                ct_u128 = (ct_u128 << 8) | UInt128(b)
-            for _ in range(rem, 16):
-                ct_u128 = ct_u128 << 8
-
-            ghash.update(ct_u128)
-            idx += 16
-
-    # Finalize GHASH
-    var len_block = (UInt128(aad_len) * 8) << 64 | (UInt128(pt_len) * 8)
-    ghash.update(len_block)
-
-    # Tag
-    var j0_vec = Block16(
-        j0[0],
-        j0[1],
-        j0[2],
-        j0[3],
-        j0[4],
-        j0[5],
-        j0[6],
-        j0[7],
-        j0[8],
-        j0[9],
-        j0[10],
-        j0[11],
-        j0[12],
-        j0[13],
-        j0[14],
-        j0[15],
-    )
-    var ek_j0 = ctx.encrypt_block(j0_vec)
-    var ek_j0_u128 = UInt128(0)
-    for i in range(16):
-        ek_j0_u128 = (ek_j0_u128 << 8) | UInt128(ek_j0[i])
-
-    var tag_u128 = ghash.y ^ ek_j0_u128
-    var tag = List[UInt8]()
-    for i in range(16):
-        var shift = (15 - i) * 8
-        tag.append(UInt8((tag_u128 >> shift) & 0xFF))
-
-    ctx.zeroize()
-    return (res^, tag^)
+fn aes_gcm_seal(key: List[UInt8], iv: List[UInt8], aad: List[UInt8], plaintext: List[UInt8]) -> AESGCMSealed:
+    """Compatibility shim for seal."""
+    try:
+        return aes_gcm_seal_internal(Span(key), Span(iv), Span(aad), Span(plaintext))
+    except:
+        return AESGCMSealed(List[UInt8](), InlineArray[UInt8, 16](0))
 
 
-fn aes_gcm_open(
-    key: List[UInt8],
-    iv: List[UInt8],
-    aad: List[UInt8],
-    ciphertext: List[UInt8],
-    tag: List[UInt8],
-) -> (List[UInt8], Bool):
-    # NIST SP 800-38D: IV length must be at least 1 bit.
-    if len(iv) == 0:
-        return (List[UInt8](), False)
-
-    # 1. Expand Key
-    var key_arr = InlineArray[UInt8, 16](0)
-    for i in range(16):
-        key_arr[i] = key[i]
-    var ctx = AESContextInline(key_arr)
-
-    # 2. H
-    var h_block = ctx.encrypt_block(Block16(0))
-    var h128 = UInt128(0)
-    for i in range(16):
-        h128 = (h128 << 8) | UInt128(h_block[i])
-
-    # 3. J0
-    var j0 = InlineArray[UInt8, 16](0)
-    if len(iv) == 12:
-        for i in range(12):
-            j0[i] = iv[i]
-        j0[15] = 1
-    else:
-        var ghash_iv = GHASHContextInline(h128)
-        var iv_len = len(iv)
-        var i_idx = 0
-        while i_idx < iv_len:
-            var blk = UInt128(0)
-            var rem = iv_len - i_idx
-            for i in range(16):
-                if i < rem:
-                    blk = (blk << 8) | UInt128(iv[i_idx + i])
-                else:
-                    blk = blk << 8
-            ghash_iv.update(blk)
-            i_idx += 16
-        var len_block = UInt128(iv_len) * 8
-        ghash_iv.update(len_block)
-        var y = ghash_iv.y
-        for i in range(16):
-            var shift = (15 - i) * 8
-            j0[i] = UInt8((y >> shift) & 0xFF)
-
-    # 4. GHASH(AAD || CT || Len)
-    var ghash = GHASHContextInline(h128)
-
-    var aad_len = len(aad)
-    var idx = 0
-    while idx < aad_len:
-        var blk = UInt128(0)
-        var rem = aad_len - idx
-        for i in range(16):
-            if i < rem:
-                blk = (blk << 8) | UInt128(aad[idx + i])
-            else:
-                blk = blk << 8
-        ghash.update(blk)
-        idx += 16
-
-    var ct_len = len(ciphertext)
-    idx = 0
-    while idx < ct_len:
-        var blk = UInt128(0)
-        var rem = ct_len - idx
-        for i in range(16):
-            if i < rem:
-                blk = (blk << 8) | UInt128(ciphertext[idx + i])
-            else:
-                blk = blk << 8
-        ghash.update(blk)
-        idx += 16
-
-    var len_block = (UInt128(aad_len) * 8) << 64 | (UInt128(ct_len) * 8)
-    ghash.update(len_block)
-
-    # 5. Check Tag
-    var j0_vec = Block16(
-        j0[0],
-        j0[1],
-        j0[2],
-        j0[3],
-        j0[4],
-        j0[5],
-        j0[6],
-        j0[7],
-        j0[8],
-        j0[9],
-        j0[10],
-        j0[11],
-        j0[12],
-        j0[13],
-        j0[14],
-        j0[15],
-    )
-    var ek_j0 = ctx.encrypt_block(j0_vec)
-    var ek_j0_u128 = UInt128(0)
-    for i in range(16):
-        ek_j0_u128 = (ek_j0_u128 << 8) | UInt128(ek_j0[i])
-
-    var calculated_tag_u128 = ghash.y ^ ek_j0_u128
-
-    # Verify
-    var tag_valid = True
-    if len(tag) != 16:
-        tag_valid = False
-    else:
-        var calculated_tag = List[UInt8]()
-        for i in range(16):
-            var shift = (15 - i) * 8
-            calculated_tag.append(UInt8((calculated_tag_u128 >> shift) & 0xFF))
-
-        if not constant_time_compare(tag, calculated_tag):
-            tag_valid = False
-
-    if not tag_valid:
-        return (List[UInt8](), False)
-
-    # 6. Decrypt
-    var counter = j0
-    inc32(counter)
-    var res = List[UInt8](capacity=ct_len)
-
-    idx = 0
-    while idx < ct_len:
-        var ctr_vec = Block16(
-            counter[0],
-            counter[1],
-            counter[2],
-            counter[3],
-            counter[4],
-            counter[5],
-            counter[6],
-            counter[7],
-            counter[8],
-            counter[9],
-            counter[10],
-            counter[11],
-            counter[12],
-            counter[13],
-            counter[14],
-            counter[15],
-        )
-
-        var ks_vec = ctx.encrypt_block(ctr_vec)
-
-        var rem = ct_len - idx
-        if rem >= 16:
-            var ct_vec = Block16(
-                ciphertext[idx],
-                ciphertext[idx + 1],
-                ciphertext[idx + 2],
-                ciphertext[idx + 3],
-                ciphertext[idx + 4],
-                ciphertext[idx + 5],
-                ciphertext[idx + 6],
-                ciphertext[idx + 7],
-                ciphertext[idx + 8],
-                ciphertext[idx + 9],
-                ciphertext[idx + 10],
-                ciphertext[idx + 11],
-                ciphertext[idx + 12],
-                ciphertext[idx + 13],
-                ciphertext[idx + 14],
-                ciphertext[idx + 15],
-            )
-            var pt_vec = ct_vec ^ ks_vec
-            for i in range(16):
-                res.append(pt_vec[i])
-            inc32(counter)
-            idx += 16
-        else:
-            for i in range(rem):
-                res.append(ciphertext[idx + i] ^ ks_vec[i])
-            idx += 16
-
-    ctx.zeroize()
-    return (res^, True)
+fn aes_gcm_open(key: List[UInt8], iv: List[UInt8], aad: List[UInt8], ciphertext: List[UInt8], tag: List[UInt8]) -> AESGCMOpened:
+    """Compatibility shim for open."""
+    var tag_arr = InlineArray[UInt8, 16](0)
+    for i in range(min(16, len(tag))):
+        tag_arr[i] = tag[i]
+    try:
+        return aes_gcm_open_internal(Span(key), Span(iv), Span(aad), Span(ciphertext), tag_arr)
+    except:
+        return AESGCMOpened(List[UInt8](), False)

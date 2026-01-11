@@ -92,18 +92,18 @@ fn test_aes_gcm_wycheproof() raises:
             # Test Open
             var opened = aes_gcm_open(key, iv, aad, ct, tag)
             if result == "valid" or result == "acceptable":
-                if not opened[1]:
+                if not opened.success:
                     raise Error(
                         "AES-GCM Wycheproof FAILURE: failed to open valid test "
                         + tc_id
                     )
-                if bytes_to_hex(opened[0]) != bytes_to_hex(msg):
+                if bytes_to_hex(opened.plaintext) != bytes_to_hex(msg):
                     raise Error(
                         "AES-GCM Wycheproof FAILURE: PT mismatch in test "
                         + tc_id
                     )
             elif result == "invalid":
-                if opened[1]:
+                if opened.success:
                     raise Error(
                         "AES-GCM Wycheproof FAILURE: opened invalid test "
                         + tc_id

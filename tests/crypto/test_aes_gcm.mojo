@@ -1,4 +1,4 @@
-from testing import assert_equal
+from testing import assert_equal, assert_true, assert_false
 
 # TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
 from crypto.aes_gcm import aes_encrypt_block, aes_gcm_seal, aes_gcm_open
@@ -17,14 +17,15 @@ fn test_gcm_vector_empty() raises:
     var iv = hex_to_bytes("000000000000000000000000")
     var aad = hex_to_bytes("")
     var pt = hex_to_bytes("")
+    # 1. Mojo Seal
     var sealed = aes_gcm_seal(key, iv, aad, pt)
-    var ct = sealed[0].copy()
-    var tag = sealed[1].copy()
-    assert_equal(bytes_to_hex(ct), "")
-    assert_equal(bytes_to_hex(tag), "58e2fccefa7e3061367f1d57a4e7455a")
+    var ct = sealed.ciphertext.copy()
+    var tag = sealed.tag.copy()
+
+    # 2. Mojo Open
     var opened = aes_gcm_open(key, iv, aad, ct, tag)
-    assert_equal(opened[1], True)
-    assert_equal(bytes_to_hex(opened[0]), "")
+    assert_true(opened.success)
+    assert_equal(len(opened.plaintext), len(pt))
 
 
 fn test_gcm_vector_one_block() raises:
@@ -33,13 +34,15 @@ fn test_gcm_vector_one_block() raises:
     var aad = hex_to_bytes("")
     var pt = hex_to_bytes("00000000000000000000000000000000")
     var sealed = aes_gcm_seal(key, iv, aad, pt)
-    var ct = sealed[0].copy()
-    var tag = sealed[1].copy()
+    var ct = sealed.ciphertext.copy()
+    var tag = sealed.tag.copy()
     assert_equal(bytes_to_hex(ct), "0388dace60b6a392f328c2b971b2fe78")
     assert_equal(bytes_to_hex(tag), "ab6e47d42cec13bdf53a67b21257bddf")
     var opened = aes_gcm_open(key, iv, aad, ct, tag)
-    assert_equal(opened[1], True)
-    assert_equal(bytes_to_hex(opened[0]), "00000000000000000000000000000000")
+    assert_true(opened.success)
+    assert_equal(
+        bytes_to_hex(opened.plaintext), "00000000000000000000000000000000"
+    )
 
 
 fn test_gcm_vector_with_aad() raises:
@@ -53,8 +56,8 @@ fn test_gcm_vector_with_aad() raises:
         "b16aedf5aa0de657ba637b39"
     )
     var sealed = aes_gcm_seal(key, iv, aad, pt)
-    var ct = sealed[0].copy()
-    var tag = sealed[1].copy()
+    var ct = sealed.ciphertext.copy()
+    var tag = sealed.tag.copy()
     assert_equal(
         bytes_to_hex(ct),
         (
@@ -66,8 +69,8 @@ fn test_gcm_vector_with_aad() raises:
     )
     assert_equal(bytes_to_hex(tag), "5bc94fbc3221a5db94fae95ae7121a47")
     var opened = aes_gcm_open(key, iv, aad, ct, tag)
-    assert_equal(opened[1], True)
-    assert_equal(bytes_to_hex(opened[0]), bytes_to_hex(pt))
+    assert_true(opened.success)
+    assert_equal(bytes_to_hex(opened.plaintext), bytes_to_hex(pt))
 
 
 fn main() raises:

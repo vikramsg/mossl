@@ -70,6 +70,34 @@ struct DerReader:
         return DerSlice(tag, start, header_len, length)
 
 
+from pki.bigint import bytes_to_bigint
+
+
+struct RSAPublicKey(Movable):
+    """A parsed RSA public key."""
+
+    var n: List[UInt64]
+    var e: List[UInt64]
+
+    fn __init__(out self, var n: List[UInt64], var e: List[UInt64]):
+        self.n = n^
+        self.e = e^
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.n = other.n^
+        self.e = other.e^
+
+
+fn parse_rsa_public_key(der: List[UInt8]) raises -> RSAPublicKey:
+    """Parses a DER-encoded RSA public key and returns an RSAPublicKey struct.
+    """
+    var reader = DerReader(der)
+    var seq = read_sequence_reader(reader)
+    var n_bytes = read_integer_bytes(seq)
+    var e_bytes = read_integer_bytes(seq)
+    return RSAPublicKey(bytes_to_bigint(n_bytes), bytes_to_bigint(e_bytes))
+
+
 fn slice_bytes(data: List[UInt8], start: Int, length: Int) -> List[UInt8]:
     var out = List[UInt8](capacity=length)
     for i in range(length):

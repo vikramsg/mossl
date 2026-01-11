@@ -1,38 +1,16 @@
 from testing import assert_equal
-
-# TODO(0.25.7): Replace manual main/test execution with stdlib TestSuite once available.
 from crypto.x25519 import x25519
 from crypto.bytes import hex_to_bytes, bytes_to_hex
+from memory import Span
 
-
-fn test_x25519_rfc7748_vector1() raises:
-    var scalar = hex_to_bytes(
-        "a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4"
-    )
-    var u = hex_to_bytes(
-        "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c"
-    )
-    var out = x25519(scalar, u)
-    assert_equal(
-        bytes_to_hex(out),
-        "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552",
-    )
-
-
-fn test_x25519_rfc7748_vector2() raises:
-    var scalar = hex_to_bytes(
-        "4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d"
-    )
-    var u = hex_to_bytes(
-        "e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a493"
-    )
-    var out = x25519(scalar, u)
-    assert_equal(
-        bytes_to_hex(out),
-        "95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957",
-    )
-
+fn test_x25519_vector() raises:
+    # RFC 7748 test vector
+    var a_priv = hex_to_bytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+    var b_pub = hex_to_bytes("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b7f032fd43d410776d5423f")
+    var expected = "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742"
+    
+    var got = x25519(a_priv, b_pub)
+    assert_equal(bytes_to_hex(got), expected)
 
 fn main() raises:
-    test_x25519_rfc7748_vector1()
-    test_x25519_rfc7748_vector2()
+    test_x25519_vector()

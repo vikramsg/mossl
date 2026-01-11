@@ -1,28 +1,48 @@
+"""RSA verification and PKCS#1 v1.5 / PSS padding support."""
+
 from collections import List
 
-from pki.bigint import BigInt, mod_pow
+from pki.asn1 import (
+    parse_rsa_public_key,
+    DerReader,
+    read_sequence_reader,
+    read_bit_string,
+    read_integer_bytes,
+)
 
 from crypto.sha256 import sha256_bytes
 from crypto.sha384 import sha384_bytes
 
-from pki.asn1 import (
-    DerReader,
-    read_sequence_reader,
-    read_integer_bytes,
-    slice_bytes,
-    read_bit_string,
+from pki.bigint import (
+    BigInt,
+    bigint_pow_mod,
+    bytes_to_bigint,
+    bigint_to_bytes,
+    bigint_compare,
 )
 
 
-fn parse_rsa_public_key(
-    pubkey_bytes: List[UInt8],
-) raises -> (List[UInt64], List[UInt64]):
-    var reader = DerReader(pubkey_bytes)
-    var seq = read_sequence_reader(reader)
+struct RSAPublicKeyParts:
+    """Modulus and exponent of an RSA public key."""
 
-    # Check if this is a SubjectPublicKeyInfo (starts with a sequence)
-    # If the first element is a sequence (AlgorithmIdentifier), then it's SPKI.
-    # If the first element is an integer (modulus), then it's a raw RSAPublicKey.
+    var n: List[UInt64]
+    var e: List[UInt64]
+
+    fn __init__(out self, var n: List[UInt64], var e: List[UInt64]):
+        self.n = n^
+        self.e = e^
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.n = other.n^
+        self.e = other.e^
+
+
+fn parse_rsa_pub_key_parts(der: List[UInt8]) raises -> RSAPublicKeyParts:
+    """Parses a DER-encoded RSA public key into its components (n, e).
+    Supports both raw RSAPublicKey and SubjectPublicKeyInfo formats.
+    """
+    var reader = DerReader(der)
+    var seq = read_sequence_reader(reader)
 
     var first = seq.peek_tag()
     if first == 0x30:
@@ -30,34 +50,27 @@ fn parse_rsa_public_key(
         _ = read_sequence_reader(seq)  # Skip AlgorithmIdentifier
         var bit_string = read_bit_string(seq)
         var inner_reader = DerReader(bit_string)
-        var rsa_seq = read_sequence_reader(inner_reader)
-        var n_bytes = read_integer_bytes(rsa_seq)
-        var e_bytes = read_integer_bytes(rsa_seq)
-        var n = BigInt(n_bytes)
-        var e = BigInt(e_bytes)
-        return (n.limbs.copy(), e.limbs.copy())
+        var rsa_key = parse_rsa_public_key(inner_reader.data)
+        return RSAPublicKeyParts(rsa_key.n.copy(), rsa_key.e.copy())
     else:
         # Raw RSAPublicKey: Sequence { modulus, publicExponent }
-        var n_bytes = read_integer_bytes(seq)
-        var e_bytes = read_integer_bytes(seq)
-        var n = BigInt(n_bytes)
-        var e = BigInt(e_bytes)
-        return (n.limbs.copy(), e.limbs.copy())
+        var rsa_key = parse_rsa_public_key(der)
+        return RSAPublicKeyParts(rsa_key.n.copy(), rsa_key.e.copy())
 
 
 fn verify_rsa_pkcs1v15(
-    pubkey: List[UInt8], msg: List[UInt8], sig_bytes: List[UInt8]
+    pub_key_der: List[UInt8], msg: List[UInt8], sig: List[UInt8]
 ) raises -> Bool:
-    var parsed = parse_rsa_public_key(pubkey)
-    var n_limbs = parsed[0].copy()
-    var e_limbs = parsed[1].copy()
+    """Verifies an RSA PKCS#1 v1.5 signature with SHA-256 or SHA-384."""
+    var parts = parse_rsa_pub_key_parts(pub_key_der)
+    var n_limbs = parts.n.copy()
+    var e_limbs = parts.e.copy()
 
     var n_obj = BigInt(n_limbs.copy())
     var target_len = (n_obj.bit_length() + 7) // 8
 
-    var s = BigInt(sig_bytes)
-    var m_limbs = mod_pow(s.limbs.copy(), e_limbs.copy(), n_limbs.copy())
-
+    var s = bytes_to_bigint(sig)
+    var m_limbs = bigint_pow_mod(s, e_limbs, n_limbs)
     var m_bytes = BigInt(m_limbs).to_be_bytes(target_len)
 
     if len(m_bytes) < 3 or m_bytes[0] != 0x00 or m_bytes[1] != 0x01:
@@ -77,48 +90,49 @@ fn verify_rsa_pkcs1v15(
         pos += 1
 
     # Check for SHA-256 prefix
-    var prefix256 = List[UInt8]()
-    prefix256.append(0x30)
-    prefix256.append(0x31)
-    prefix256.append(0x30)
-    prefix256.append(0x0D)
-    prefix256.append(0x06)
-    prefix256.append(0x09)
-    prefix256.append(0x60)
-    prefix256.append(0x86)
-    prefix256.append(0x48)
-    prefix256.append(0x01)
-    prefix256.append(0x65)
-    prefix256.append(0x03)
-    prefix256.append(0x04)
-    prefix256.append(0x02)
-    prefix256.append(0x01)
-    prefix256.append(0x05)
-    prefix256.append(0x00)
-    prefix256.append(0x04)
-    prefix256.append(0x20)
-
+    var prefix256 = List[UInt8](
+        0x30,
+        0x31,
+        0x30,
+        0x0D,
+        0x06,
+        0x09,
+        0x60,
+        0x86,
+        0x48,
+        0x01,
+        0x65,
+        0x03,
+        0x04,
+        0x02,
+        0x01,
+        0x05,
+        0x00,
+        0x04,
+        0x20,
+    )
     # Check for SHA-384 prefix
-    var prefix384 = List[UInt8]()
-    prefix384.append(0x30)
-    prefix384.append(0x41)
-    prefix384.append(0x30)
-    prefix384.append(0x0D)
-    prefix384.append(0x06)
-    prefix384.append(0x09)
-    prefix384.append(0x60)
-    prefix384.append(0x86)
-    prefix384.append(0x48)
-    prefix384.append(0x01)
-    prefix384.append(0x65)
-    prefix384.append(0x03)
-    prefix384.append(0x04)
-    prefix384.append(0x02)
-    prefix384.append(0x02)
-    prefix384.append(0x05)
-    prefix384.append(0x00)
-    prefix384.append(0x04)
-    prefix384.append(0x30)
+    var prefix384 = List[UInt8](
+        0x30,
+        0x41,
+        0x30,
+        0x0D,
+        0x06,
+        0x09,
+        0x60,
+        0x86,
+        0x48,
+        0x01,
+        0x65,
+        0x03,
+        0x04,
+        0x02,
+        0x02,
+        0x05,
+        0x00,
+        0x04,
+        0x30,
+    )
 
     if len(payload) == len(prefix256) + 32:
         var is_match = True
@@ -150,6 +164,7 @@ fn verify_rsa_pkcs1v15(
 
 
 fn mgf1_sha256(seed: List[UInt8], out_len: Int) -> List[UInt8]:
+    """MGF1 mask generation function based on SHA-256."""
     var out = List[UInt8]()
     var counter = UInt32(0)
     while len(out) < out_len:
@@ -173,11 +188,12 @@ fn mgf1_sha256(seed: List[UInt8], out_len: Int) -> List[UInt8]:
 
 
 fn verify_rsa_pss_sha256(
-    pubkey: List[UInt8], msg: List[UInt8], sig_bytes: List[UInt8]
+    pub_key_der: List[UInt8], msg: List[UInt8], sig: List[UInt8]
 ) raises -> Bool:
-    var parsed = parse_rsa_public_key(pubkey)
-    var n_limbs = parsed[0].copy()
-    var e_limbs = parsed[1].copy()
+    """Verifies an RSA PSS signature with SHA-256."""
+    var parts = parse_rsa_pub_key_parts(pub_key_der)
+    var n_limbs = parts.n.copy()
+    var e_limbs = parts.e.copy()
 
     var n_obj = BigInt(n_limbs.copy())
     var mod_bits = n_obj.bit_length()
@@ -185,11 +201,11 @@ fn verify_rsa_pss_sha256(
         return False
     var em_bits = mod_bits - 1
     var em_len = (em_bits + 7) // 8
-    if len(sig_bytes) != em_len:
+    if len(sig) != em_len:
         return False
 
-    var s = BigInt(sig_bytes)
-    var m_limbs = mod_pow(s.limbs.copy(), e_limbs.copy(), n_limbs.copy())
+    var s = bytes_to_bigint(sig)
+    var m_limbs = bigint_pow_mod(s, e_limbs, n_limbs)
     var em = BigInt(m_limbs).to_be_bytes(em_len)
     if len(em) != em_len:
         return False
@@ -219,8 +235,8 @@ fn verify_rsa_pss_sha256(
 
     var db_mask = mgf1_sha256(h, masked_db_len)
     var db = List[UInt8]()
-    for i in range(masked_db_len):
-        db.append(masked_db[i] ^ db_mask[i])
+    for j in range(masked_db_len):
+        db.append(masked_db[j] ^ db_mask[j])
     if unused_bits > 0:
         var mask2 = UInt8(0xFF) >> unused_bits
         db[0] = db[0] & mask2
@@ -250,7 +266,7 @@ fn verify_rsa_pss_sha256(
     var h2 = sha256_bytes(m_prime)
     if len(h2) != h_len:
         return False
-    for i in range(h_len):
-        if h2[i] != h[i]:
+    for j in range(h_len):
+        if h2[j] != h[j]:
             return False
     return True

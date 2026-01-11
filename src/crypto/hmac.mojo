@@ -1,32 +1,55 @@
-"""Pure Mojo HMAC-SHA256 implementation."""
-from collections import List
-
-from crypto.bytes import concat_bytes, zeros
-from crypto.sha256 import sha256_bytes
-
-
-fn pad_key(key: List[UInt8], block_size: Int) -> List[UInt8]:
-    var out = List[UInt8]()
-    for b in key:
-        out.append(b)
-    while len(out) < block_size:
-        out.append(UInt8(0))
-    return out^
+"""Pure Mojo HMAC-SHA256 implementation.
+Refactored to return the tag instead of using mut.
+"""
+from collections import List, InlineArray
+from memory import Span
+from crypto.sha256 import sha256
 
 
+fn hmac_sha256(key: Span[UInt8], data: Span[UInt8]) raises -> InlineArray[UInt8, 32]:
+    """Computes the HMAC-SHA256 of the input data using the provided key."""
+    var k = InlineArray[UInt8, 64](0)
+    if len(key) > 64:
+        var k_tmp = sha256(key)
+        for i in range(32):
+            k[i] = k_tmp[i]
+    else:
+        for i in range(len(key)):
+            k[i] = key[i]
+
+    var i_key = InlineArray[UInt8, 64](0)
+    var o_key = InlineArray[UInt8, 64](0)
+    for i in range(64):
+        i_key[i] = k[i] ^ 0x36
+        o_key[i] = k[i] ^ 0x5C
+
+    # Inner hash: sha256(i_key || data)
+    var inner_data = List[UInt8](capacity=64 + len(data))
+    for i in range(64):
+        inner_data.append(i_key[i])
+    for i in range(len(data)):
+        inner_data.append(data[i])
+
+    var inner_hash = sha256(inner_data)
+
+    # Outer hash: sha256(o_key || inner_hash)
+    var outer_data = List[UInt8](capacity=64 + 32)
+    for i in range(64):
+        outer_data.append(o_key[i])
+    for i in range(32):
+        outer_data.append(inner_hash[i])
+
+    return sha256(outer_data)
+
+
+# Compatibility shim (deprecated)
 fn hmac_sha256(key: List[UInt8], data: List[UInt8]) -> List[UInt8]:
-    var k = key.copy()
-    if len(k) > 64:
-        k = sha256_bytes(k)
-    k = pad_key(k, 64)
-
-    var o_key = List[UInt8]()
-    var i_key = List[UInt8]()
-    var i = 0
-    while i < 64:
-        o_key.append(UInt8(k[i] ^ UInt8(0x5C)))
-        i_key.append(UInt8(k[i] ^ UInt8(0x36)))
-        i += 1
-
-    var inner = sha256_bytes(concat_bytes(i_key, data))
-    return sha256_bytes(concat_bytes(o_key, inner))
+    """Compatibility shim returning List[UInt8]."""
+    try:
+        var t = hmac_sha256(Span(key), Span(data))
+        var out = List[UInt8](capacity=32)
+        for i in range(32):
+            out.append(t[i])
+        return out^
+    except:
+        return List[UInt8]()

@@ -76,6 +76,21 @@ struct BigInt(Movable):
         return out.copy()
 
 
+fn bytes_to_bigint(bytes: List[UInt8]) -> List[UInt64]:
+    """Converts big-endian bytes to a list of limbs."""
+    return BigInt(bytes).limbs.copy()
+
+
+fn bigint_to_bytes(limbs: List[UInt64], target_len: Int = 0) -> List[UInt8]:
+    """Converts a list of limbs to big-endian bytes."""
+    return BigInt(limbs).to_be_bytes(target_len)
+
+
+fn bigint_compare(a: List[UInt64], b: List[UInt64]) -> Int:
+    """Compares two BigInts represented as lists of limbs."""
+    return cmp_limbs(a, b)
+
+
 fn cmp_limbs(a: List[UInt64], b: List[UInt64]) -> Int:
     var i_max = len(a) - 1
     var j_max = len(b) - 1
