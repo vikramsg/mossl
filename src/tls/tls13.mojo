@@ -43,6 +43,8 @@ alias EXT_KEY_SHARE = UInt16(0x0033)
 
 alias GROUP_X25519 = UInt16(0x001D)
 alias CIPHER_TLS_AES_128_GCM_SHA256 = UInt16(0x1301)
+alias CIPHER_TLS_AES_256_GCM_SHA384 = UInt16(0x1302)
+alias CIPHER_TLS_CHACHA20_POLY1305_SHA256 = UInt16(0x1303)
 
 alias SIG_RSA_PKCS1_SHA256 = UInt16(0x0401)
 alias SIG_RSA_PKCS1_SHA384 = UInt16(0x0501)
@@ -50,6 +52,65 @@ alias SIG_RSA_PKCS1_SHA512 = UInt16(0x0601)
 alias SIG_ECDSA_SECP256R1_SHA256 = UInt16(0x0403)
 alias SIG_ECDSA_SECP384R1_SHA384 = UInt16(0x0503)
 alias SIG_RSA_PSS_RSAE_SHA256 = UInt16(0x0804)
+
+
+@fieldwise_init
+struct HandshakeMessage(Movable):
+    """A TLS handshake message."""
+
+    var msg_type: UInt8
+    var payload: List[UInt8]
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.msg_type = other.msg_type
+        self.payload = other.payload^
+
+
+@fieldwise_init
+struct HandshakeDefragmenter(Movable):
+    """Helper for reading sequential handshake messages from TLS records."""
+
+    var buffer: List[UInt8]
+
+    fn __moveinit__(out self, deinit other: Self):
+        self.buffer = other.buffer^
+
+    fn __init__(out self):
+        self.buffer = List[UInt8]()
+
+    fn add_data(mut self, data: List[UInt8]):
+        """Adds raw decrypted record content to the buffer."""
+        self.buffer.extend(data)
+
+    fn has_full_message(self) -> Bool:
+        """Checks if at least one full message is in the buffer."""
+        if len(self.buffer) < 4:
+            return False
+        var length = (Int(self.buffer[1]) << 16) | (Int(self.buffer[2]) << 8) | Int(self.buffer[3])
+        return len(self.buffer) >= 4 + length
+
+    fn next_message(mut self) raises -> HandshakeMessage:
+        """Parses and returns the next handshake message from the buffer."""
+        if len(self.buffer) < 4:
+            raise Error("Handshake reader: no message header")
+
+        var msg_type = self.buffer[0]
+        var length = (Int(self.buffer[1]) << 16) | (Int(self.buffer[2]) << 8) | Int(self.buffer[3])
+
+        if len(self.buffer) < 4 + length:
+            raise Error("Handshake reader: message incomplete")
+
+        var payload = List[UInt8](capacity=length)
+        for i in range(length):
+            payload.append(self.buffer[4 + i])
+
+        # Remove consumed bytes from buffer efficiently
+        var new_buffer = List[UInt8](capacity=len(self.buffer) - (4 + length))
+        for i in range(4 + length, len(self.buffer)):
+            new_buffer.append(self.buffer[i])
+        self.buffer = new_buffer^
+
+        return HandshakeMessage(msg_type, payload^)
 
 
 struct ByteCursor:
@@ -103,51 +164,51 @@ struct ByteCursor:
 struct TLS13Keys(Copyable, ImplicitlyCopyable):
     """Container for TLS 1.3 session keys and secrets."""
 
-    var client_hs_secret: InlineArray[UInt8, 32]
-    var server_hs_secret: InlineArray[UInt8, 32]
-    var client_hs_key: InlineArray[UInt8, 16]
-    var server_hs_key: InlineArray[UInt8, 16]
+    var client_hs_secret: List[UInt8]
+    var server_hs_secret: List[UInt8]
+    var client_hs_key: List[UInt8]
+    var server_hs_key: List[UInt8]
     var client_hs_iv: InlineArray[UInt8, 12]
     var server_hs_iv: InlineArray[UInt8, 12]
-    var client_finished_key: InlineArray[UInt8, 32]
-    var server_finished_key: InlineArray[UInt8, 32]
+    var client_finished_key: List[UInt8]
+    var server_finished_key: List[UInt8]
 
-    var client_app_secret: InlineArray[UInt8, 32]
-    var server_app_secret: InlineArray[UInt8, 32]
-    var client_app_key: InlineArray[UInt8, 16]
-    var server_app_key: InlineArray[UInt8, 16]
+    var client_app_secret: List[UInt8]
+    var server_app_secret: List[UInt8]
+    var client_app_key: List[UInt8]
+    var server_app_key: List[UInt8]
     var client_app_iv: InlineArray[UInt8, 12]
     var server_app_iv: InlineArray[UInt8, 12]
 
     fn __init__(out self):
-        self.client_hs_secret = InlineArray[UInt8, 32](0)
-        self.server_hs_secret = InlineArray[UInt8, 32](0)
-        self.client_hs_key = InlineArray[UInt8, 16](0)
-        self.server_hs_key = InlineArray[UInt8, 16](0)
+        self.client_hs_secret = List[UInt8]()
+        self.server_hs_secret = List[UInt8]()
+        self.client_hs_key = List[UInt8]()
+        self.server_hs_key = List[UInt8]()
         self.client_hs_iv = InlineArray[UInt8, 12](0)
         self.server_hs_iv = InlineArray[UInt8, 12](0)
-        self.client_finished_key = InlineArray[UInt8, 32](0)
-        self.server_finished_key = InlineArray[UInt8, 32](0)
-        self.client_app_secret = InlineArray[UInt8, 32](0)
-        self.server_app_secret = InlineArray[UInt8, 32](0)
-        self.client_app_key = InlineArray[UInt8, 16](0)
-        self.server_app_key = InlineArray[UInt8, 16](0)
+        self.client_finished_key = List[UInt8]()
+        self.server_finished_key = List[UInt8]()
+        self.client_app_secret = List[UInt8]()
+        self.server_app_secret = List[UInt8]()
+        self.client_app_key = List[UInt8]()
+        self.server_app_key = List[UInt8]()
         self.client_app_iv = InlineArray[UInt8, 12](0)
         self.server_app_iv = InlineArray[UInt8, 12](0)
 
     fn __copyinit__(out self, other: Self):
-        self.client_hs_secret = other.client_hs_secret
-        self.server_hs_secret = other.server_hs_secret
-        self.client_hs_key = other.client_hs_key
-        self.server_hs_key = other.server_hs_key
+        self.client_hs_secret = other.client_hs_secret.copy()
+        self.server_hs_secret = other.server_hs_secret.copy()
+        self.client_hs_key = other.client_hs_key.copy()
+        self.server_hs_key = other.server_hs_key.copy()
         self.client_hs_iv = other.client_hs_iv
         self.server_hs_iv = other.server_hs_iv
-        self.client_finished_key = other.client_finished_key
-        self.server_finished_key = other.server_finished_key
-        self.client_app_secret = other.client_app_secret
-        self.server_app_secret = other.server_app_secret
-        self.client_app_key = other.client_app_key
-        self.server_app_key = other.server_app_key
+        self.client_finished_key = other.client_finished_key.copy()
+        self.server_finished_key = other.server_finished_key.copy()
+        self.client_app_secret = other.client_app_secret.copy()
+        self.server_app_secret = other.server_app_secret.copy()
+        self.client_app_key = other.client_app_key.copy()
+        self.server_app_key = other.server_app_key.copy()
         self.client_app_iv = other.client_app_iv
         self.server_app_iv = other.server_app_iv
 
@@ -267,6 +328,33 @@ fn _tls13_hkdf_expand_label[
         info.append(context[i])
 
     var tmp = hkdf_expand(secret, info, target_len)
+    var out = InlineArray[UInt8, target_len](0)
+    for i in range(target_len):
+        out[i] = tmp[i]
+    return out
+
+
+fn _tls13_hkdf_expand_label_sha384[
+    target_len: Int
+](
+    secret: Span[UInt8], label: String, context: Span[UInt8]
+) raises -> InlineArray[UInt8, target_len]:
+    """Performs HKDF-Expand-Label using SHA-384."""
+    var full_label = "tls13 " + label
+    var label_bytes = _string_to_bytes(full_label)
+    var info = List[UInt8](capacity=2 + 1 + len(label_bytes) + 1 + len(context))
+    var len_bytes = _u16_to_bytes(UInt16(target_len))
+    info.append(len_bytes[0])
+    info.append(len_bytes[1])
+    info.append(UInt8(len(label_bytes)))
+    for b in label_bytes:
+        info.append(b)
+    info.append(UInt8(len(context)))
+    for i in range(len(context)):
+        info.append(context[i])
+
+    from crypto.hkdf import hkdf_expand_sha384
+    var tmp = hkdf_expand_sha384(secret, info, target_len)
     var out = InlineArray[UInt8, target_len](0)
     for i in range(target_len):
         out[i] = tmp[i]
@@ -450,7 +538,7 @@ struct TLS13Client[T: TLSTransport](Movable):
     var host: String
     var keys: TLS13Keys
     var transcript: List[UInt8]
-    var handshake_secret: InlineArray[UInt8, 32]
+    var handshake_secret: List[UInt8]
     var shared_secret: InlineArray[UInt8, 32]
     var server_pubkey: List[UInt8]
     var app_seq_in: UInt64
@@ -458,6 +546,7 @@ struct TLS13Client[T: TLSTransport](Movable):
     var hs_seq_in: UInt64
     var hs_seq_out: UInt64
     var handshake_done: Bool
+    var defragmenter: HandshakeDefragmenter
 
     fn __init__(out self, var transport: T, host: String):
         """Initializes the client with a transport and remote host."""
@@ -465,7 +554,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.host = host
         self.keys = TLS13Keys()
         self.transcript = List[UInt8]()
-        self.handshake_secret = InlineArray[UInt8, 32](0)
+        self.handshake_secret = List[UInt8]()
         self.shared_secret = InlineArray[UInt8, 32](0)
         self.server_pubkey = List[UInt8]()
         self.app_seq_in = 0
@@ -473,6 +562,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.hs_seq_in = 0
         self.hs_seq_out = 0
         self.handshake_done = False
+        self.defragmenter = HandshakeDefragmenter()
 
     fn __moveinit__(out self, deinit other: Self):
         """Move constructor for TLS13Client."""
@@ -480,7 +570,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.host = other.host
         self.keys = other.keys
         self.transcript = other.transcript^
-        self.handshake_secret = other.handshake_secret
+        self.handshake_secret = other.handshake_secret^
         self.shared_secret = other.shared_secret
         self.server_pubkey = other.server_pubkey^
         self.app_seq_in = other.app_seq_in
@@ -488,12 +578,13 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.hs_seq_in = other.hs_seq_in
         self.hs_seq_out = other.hs_seq_out
         self.handshake_done = other.handshake_done
+        self.defragmenter = other.defragmenter^
 
     fn encrypt_record(
         self,
         payload: Span[UInt8],
         content_type: UInt8,
-        key: InlineArray[UInt8, 16],
+        key: Span[UInt8],
         iv: InlineArray[UInt8, 12],
         seq: UInt64,
     ) raises -> List[UInt8]:
@@ -505,7 +596,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         var aad = _build_record_aad(len(inner) + 16)
         var nonce = _xor_iv(iv, seq)
         var sealed = aes_gcm_seal_internal(
-            Span(key), Span(nonce), Span(aad), Span(inner)
+            key, Span(nonce), Span(aad), Span(inner)
         )
         var ciphertext = sealed.ciphertext.copy()
         var tag = sealed.tag
@@ -529,7 +620,7 @@ struct TLS13Client[T: TLSTransport](Movable):
     fn decrypt_record(
         self,
         payload: List[UInt8],
-        key: InlineArray[UInt8, 16],
+        key: Span[UInt8],
         iv: InlineArray[UInt8, 12],
         seq: UInt64,
     ) raises -> DecryptedRecord:
@@ -544,11 +635,13 @@ struct TLS13Client[T: TLSTransport](Movable):
             tag[i] = payload[len(payload) - 16 + i]
         var aad = _build_record_aad(len(payload))
         var nonce = _xor_iv(iv, seq)
+        print("  - Decrypt: seq=" + String(seq) + " payload_len=" + String(len(payload)))
 
         var opened = aes_gcm_open_internal(
-            Span(key), Span(nonce), Span(aad), Span(ct), tag
+            key, Span(nonce), Span(aad), Span(ct), tag
         )
         if not opened.success:
+            print("  - Decrypt FAILED: seq=" + String(seq))
             raise Error("TLS decrypt: auth failed")
         var pt = opened.plaintext.copy()
 
@@ -558,6 +651,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         if idx < 0:
             raise Error("TLS decrypt: no content type")
         var content_type = pt[idx]
+        print("  - Decrypt SUCCESS: inner_type=" + String(content_type))
         var content = List[UInt8]()
         for j in range(idx):
             content.append(pt[j])
@@ -570,14 +664,55 @@ struct TLS13Client[T: TLSTransport](Movable):
         var payload = _read_exact(self.transport, length)
         return TLSRecord(header[0], payload^)
 
+    fn read_handshake_message(mut self) raises -> HandshakeMessage:
+        """Reads a handshake message, skipping CCS and handling fragmentation."""
+        while not self.defragmenter.has_full_message():
+            var rec = self.read_record()
+            if rec.content_type == 20: # Skip ChangeCipherSpec
+                continue
+            if rec.content_type != 0x16: # Handshake
+                raise Error("Expected handshake record, got " + String(rec.content_type))
+            self.defragmenter.add_data(rec.payload)
+        return self.defragmenter.next_message()
+
+    fn read_handshake_message_encrypted(mut self) raises -> HandshakeMessage:
+        """Reads an encrypted handshake message, skipping CCS and handling fragmentation."""
+        while not self.defragmenter.has_full_message():
+            var rec = self.read_record()
+            if rec.content_type == 20: # Skip ChangeCipherSpec
+                continue
+            if rec.content_type != 0x17: # AppData (Encrypted)
+                raise Error("Expected encrypted record, got " + String(rec.content_type))
+            
+            var key = self.keys.server_hs_key.copy()
+            var iv = self.keys.server_hs_iv
+            var dec = self.decrypt_record(
+                rec.payload,
+                Span(key),
+                iv,
+                self.hs_seq_in,
+            )
+            self.hs_seq_in += 1
+            
+            if dec.inner_type == 0x16: # Handshake
+                self.defragmenter.add_data(dec.content)
+            elif dec.inner_type == 21: # Alert
+                 raise Error("TLS Alert received")
+            else:
+                # Skip other types (like NewSessionTicket if they appear as separate inner records)
+                continue
+        return self.defragmenter.next_message()
+
     fn send_handshake(mut self, msg: List[UInt8], encrypt: Bool) raises:
         """Encapsulates and sends a handshake message."""
         if encrypt:
+            var key = self.keys.client_hs_key.copy()
+            var iv = self.keys.client_hs_iv
             var record = self.encrypt_record(
                 Span(msg),
                 CONTENT_HANDSHAKE,
-                self.keys.client_hs_key,
-                self.keys.client_hs_iv,
+                Span(key),
+                iv,
                 self.hs_seq_out,
             )
             self.hs_seq_out += 1
@@ -594,53 +729,83 @@ struct TLS13Client[T: TLSTransport](Movable):
                 out.append(b)
             _ = self.transport.write(Span(_bytes_to_bytes(out)))
 
-    fn _derive_keys(mut self, handshake_secret: InlineArray[UInt8, 32]) raises:
+    fn _derive_keys(mut self, handshake_secret: Span[UInt8]) raises:
         """Derives handshake traffic keys."""
         var empty = List[UInt8]()
         var th_arr = sha256(self.transcript)
 
-        self.keys.client_hs_secret = _tls13_hkdf_expand_label[32](
-            Span(handshake_secret), "c hs traffic", Span(th_arr)
+        var c_hs_secret = _tls13_hkdf_expand_label[32](
+            handshake_secret, "c hs traffic", Span(th_arr)
         )
-        self.keys.server_hs_secret = _tls13_hkdf_expand_label[32](
-            Span(handshake_secret), "s hs traffic", Span(th_arr)
+        self.keys.client_hs_secret = List[UInt8]()
+        for i in range(32): self.keys.client_hs_secret.append(c_hs_secret[i])
+
+        var s_hs_secret = _tls13_hkdf_expand_label[32](
+            handshake_secret, "s hs traffic", Span(th_arr)
         )
-        self.keys.client_hs_key = _tls13_hkdf_expand_label[16](
+        self.keys.server_hs_secret = List[UInt8]()
+        for i in range(32): self.keys.server_hs_secret.append(s_hs_secret[i])
+
+        var c_hs_key = _tls13_hkdf_expand_label[16](
             Span(self.keys.client_hs_secret), "key", Span(empty)
         )
-        self.keys.server_hs_key = _tls13_hkdf_expand_label[16](
+        self.keys.client_hs_key = List[UInt8]()
+        for i in range(16): self.keys.client_hs_key.append(c_hs_key[i])
+
+        var s_hs_key = _tls13_hkdf_expand_label[16](
             Span(self.keys.server_hs_secret), "key", Span(empty)
         )
+        self.keys.server_hs_key = List[UInt8]()
+        for i in range(16): self.keys.server_hs_key.append(s_hs_key[i])
+
         self.keys.client_hs_iv = _tls13_hkdf_expand_label[12](
             Span(self.keys.client_hs_secret), "iv", Span(empty)
         )
         self.keys.server_hs_iv = _tls13_hkdf_expand_label[12](
             Span(self.keys.server_hs_secret), "iv", Span(empty)
         )
-        self.keys.client_finished_key = _tls13_hkdf_expand_label[32](
+
+        var c_fin_key = _tls13_hkdf_expand_label[32](
             Span(self.keys.client_hs_secret), "finished", Span(empty)
         )
-        self.keys.server_finished_key = _tls13_hkdf_expand_label[32](
+        self.keys.client_finished_key = List[UInt8]()
+        for i in range(32): self.keys.client_finished_key.append(c_fin_key[i])
+
+        var s_fin_key = _tls13_hkdf_expand_label[32](
             Span(self.keys.server_hs_secret), "finished", Span(empty)
         )
+        self.keys.server_finished_key = List[UInt8]()
+        for i in range(32): self.keys.server_finished_key.append(s_fin_key[i])
 
-    fn _derive_app_keys(mut self, master_secret: InlineArray[UInt8, 32]) raises:
+    fn _derive_app_keys(mut self, master_secret: Span[UInt8]) raises:
         """Derives application traffic keys."""
         var empty = List[UInt8]()
         var th_arr = sha256(self.transcript)
 
-        self.keys.client_app_secret = _tls13_hkdf_expand_label[32](
-            Span(master_secret), "c ap traffic", Span(th_arr)
+        var c_ap_secret = _tls13_hkdf_expand_label[32](
+            master_secret, "c ap traffic", Span(th_arr)
         )
-        self.keys.server_app_secret = _tls13_hkdf_expand_label[32](
-            Span(master_secret), "s ap traffic", Span(th_arr)
+        self.keys.client_app_secret = List[UInt8]()
+        for i in range(32): self.keys.client_app_secret.append(c_ap_secret[i])
+
+        var s_ap_secret = _tls13_hkdf_expand_label[32](
+            master_secret, "s ap traffic", Span(th_arr)
         )
-        self.keys.client_app_key = _tls13_hkdf_expand_label[16](
+        self.keys.server_app_secret = List[UInt8]()
+        for i in range(32): self.keys.server_app_secret.append(s_ap_secret[i])
+
+        var c_ap_key = _tls13_hkdf_expand_label[16](
             Span(self.keys.client_app_secret), "key", Span(empty)
         )
-        self.keys.server_app_key = _tls13_hkdf_expand_label[16](
+        self.keys.client_app_key = List[UInt8]()
+        for i in range(16): self.keys.client_app_key.append(c_ap_key[i])
+
+        var s_ap_key = _tls13_hkdf_expand_label[16](
             Span(self.keys.server_app_secret), "key", Span(empty)
         )
+        self.keys.server_app_key = List[UInt8]()
+        for i in range(16): self.keys.server_app_key.append(s_ap_key[i])
+
         self.keys.client_app_iv = _tls13_hkdf_expand_label[12](
             Span(self.keys.client_app_secret), "iv", Span(empty)
         )
@@ -650,7 +815,6 @@ struct TLS13Client[T: TLSTransport](Movable):
 
     fn perform_handshake(mut self) raises -> Bool:
         """Executes the TLS 1.3 handshake sequence."""
-        import time
         var client_random = _random_bytes(32)
         var client_priv = _random_bytes(32)
         var base_u = List[UInt8]()
@@ -664,33 +828,26 @@ struct TLS13Client[T: TLSTransport](Movable):
 
         var ch_body = _make_client_hello(self.host, client_random, client_pub)
         var ch_msg = _wrap_handshake(HS_CLIENT_HELLO, ch_body)
-        for b in ch_msg:
-            self.transcript.append(b)
+        self.transcript.extend(ch_msg)
         self.send_handshake(ch_msg, False)
 
-        var rec = self.read_record()
-        while rec.content_type == 20: # Skip ChangeCipherSpec
-            rec = self.read_record()
-            
-        if rec.content_type == CONTENT_ALERT:
-            raise Error("TLS alert")
-        var cursor = ByteCursor(rec.payload)
-        var mt = cursor.read_u8()
-        var ml = cursor.read_u24()
-        var sh_body = cursor.read_bytes(ml)
-        var sh_msg = _wrap_handshake(mt, sh_body)
-        for b in sh_msg:
-            self.transcript.append(b)
+        # 1. Read ServerHello
+        var sh_msg = self.read_handshake_message()
+        self.transcript.extend(_wrap_handshake(sh_msg.msg_type, sh_msg.payload))
 
-        var sh = ByteCursor(sh_body)
+        var sh = ByteCursor(sh_msg.payload)
         _ = sh.read_u16()
         _ = sh.read_bytes(32)
         _ = sh.read_u8()
         var cipher = sh.read_u16()
+        print("  - Selected cipher: " + hex(cipher))
         _ = sh.read_u8()
+        
+        # Determine PRF based on cipher
+        var use_sha384 = (cipher == CIPHER_TLS_AES_256_GCM_SHA384)
+        
         var ext_len = Int(sh.read_u16())
-        var ext_bytes = sh.read_bytes(ext_len)
-        var ext_cur = ByteCursor(ext_bytes)
+        var ext_cur = ByteCursor(sh.read_bytes(ext_len))
         var server_pub = List[UInt8]()
         while ext_cur.remaining() > 0:
             var etype = ext_cur.read_u16()
@@ -703,120 +860,108 @@ struct TLS13Client[T: TLSTransport](Movable):
                 server_pub = ec.read_bytes(klen)
 
         var shared_arr = x25519(Span(client_priv), Span(server_pub))
-
-        var empty = List[UInt8]()
-        var zeros32 = zeros(32)
-        var empty_h_arr = sha256(empty)
-        var th_arr = sha256(self.transcript)
-
-        var early = hkdf_extract(Span(empty), Span(zeros32))
-        var derived = _tls13_hkdf_expand_label[32](
-            Span(early), "derived", Span(empty_h_arr)
-        )
-        var handshake_secret = hkdf_extract(Span(derived), Span(shared_arr))
-
-        self.handshake_secret = handshake_secret
         self.shared_secret = shared_arr
-        self._derive_keys(handshake_secret)
 
-        var handshake_buf = List[UInt8]()
+        # Key Schedule Phase 1: Handshake Secret
+        var empty = List[UInt8]()
+        if use_sha384:
+            from crypto.hkdf import hkdf_extract_sha384
+            from crypto.sha384 import sha384
+            var zeros48 = List[UInt8]()
+            for _ in range(48): zeros48.append(0)
+            var early = hkdf_extract_sha384(Span(empty), Span(zeros48))
+            var derived = _tls13_hkdf_expand_label_sha384[48](
+                Span(early), "derived", Span(sha384(Span(empty)))
+            )
+            var hs_secret = hkdf_extract_sha384(Span(derived), Span(shared_arr))
+            self.handshake_secret = List[UInt8]()
+            for i in range(48): self.handshake_secret.append(hs_secret[i])
+            # TODO: Add _derive_keys_sha384
+        else:
+            var zeros32 = zeros(32)
+            var early = hkdf_extract(Span(empty), Span(zeros32))
+            var derived = _tls13_hkdf_expand_label[32](
+                Span(early), "derived", Span(sha256(Span(empty)))
+            )
+            var hs_secret = hkdf_extract(Span(derived), Span(shared_arr))
+            self.handshake_secret = List[UInt8]()
+            for i in range(32): self.handshake_secret.append(hs_secret[i])
+            var hs_tmp = self.handshake_secret.copy()
+            self._derive_keys(Span(hs_tmp))
+
+        # 2. Process encrypted handshake flight
         var got_finished = False
         while not got_finished:
-            var r2 = self.read_record()
-            while r2.content_type == 20: # Skip ALL unencrypted ChangeCipherSpec
-                r2 = self.read_record()
+            var msg = self.read_handshake_message_encrypted()
+            var full = _wrap_handshake(msg.msg_type, msg.payload)
+            
+            if msg.msg_type == HS_CERTIFICATE:
+                var cert_cur = ByteCursor(msg.payload)
+                var ctx_len = cert_cur.read_u8()
+                _ = cert_cur.read_bytes(Int(ctx_len))
+                var cert_list_len = cert_cur.read_u24()
+                var clist_cur = ByteCursor(cert_cur.read_bytes(cert_list_len))
+                var certs = List[List[UInt8]]()
+                while clist_cur.remaining() > 0:
+                    var c_len = clist_cur.read_u24()
+                    certs.append(clist_cur.read_bytes(c_len))
+                    var extensions_len = clist_cur.read_u16()
+                    _ = clist_cur.read_bytes(Int(extensions_len))
                 
-            if r2.content_type != CONTENT_APPDATA:
-                continue
-            var dec = self.decrypt_record(
-                r2.payload,
-                self.keys.server_hs_key,
-                self.keys.server_hs_iv,
-                self.hs_seq_in,
-            )
-            self.hs_seq_in += 1
-            for b in dec.content:
-                handshake_buf.append(b)
-            while len(handshake_buf) >= 4:
-                var hc = ByteCursor(handshake_buf)
-                var hmt = hc.read_u8()
-                var hml = hc.read_u24()
-                if hc.remaining() < hml:
-                    break
-                var hbody = hc.read_bytes(hml)
-                var full = _wrap_handshake(hmt, hbody)
+                var trust = load_trust_store()
+                if not verify_chain(certs, trust, _string_to_bytes(self.host)):
+                    raise Error("Certificate verification failed")
+                var parsed = parse_certificate(certs[0])
+                self.server_pubkey = parsed.public_key.copy()
+            
+            elif msg.msg_type == HS_CERT_VERIFY:
+                var cv_cur = ByteCursor(msg.payload)
+                var sig_alg = cv_cur.read_u16()
+                var sig_len = Int(cv_cur.read_u16())
+                var sig = cv_cur.read_bytes(sig_len)
                 
-                if hmt == HS_CERTIFICATE:
-                    var start_cert = time.perf_counter()
-                    var cert_cur = ByteCursor(hbody)
-                    var ctx_len = cert_cur.read_u8()
-                    _ = cert_cur.read_bytes(Int(ctx_len))
-                    var cert_list_len = cert_cur.read_u24()
-                    var clist_bytes = cert_cur.read_bytes(cert_list_len)
-                    var clist_cur = ByteCursor(clist_bytes)
-                    var certs = List[List[UInt8]]()
-                    while clist_cur.remaining() > 0:
-                        var c_len = clist_cur.read_u24()
-                        certs.append(clist_cur.read_bytes(c_len))
-                        var extensions_len = clist_cur.read_u16()
-                        _ = clist_cur.read_bytes(Int(extensions_len))
-                    
-                    var trust = load_trust_store()
-                    if not verify_chain(certs, trust, _string_to_bytes(self.host)):
-                        raise Error("Certificate verification failed")
-                    var parsed = parse_certificate(certs[0])
-                    self.server_pubkey = parsed.public_key.copy()
+                var th_arr_cv = sha256(self.transcript)
+                var padded = List[UInt8]()
+                for _ in range(64): padded.append(0x20)
+                var context_str = "TLS 1.3, server CertificateVerify"
+                for i in range(len(context_str)): padded.append(ord(context_str[i]))
+                padded.append(0)
+                for i in range(32): padded.append(th_arr_cv[i])
                 
-                if hmt == HS_CERT_VERIFY:
-                    var cv_cur = ByteCursor(hbody)
-                    var sig_alg = cv_cur.read_u16()
-                    var sig_len = Int(cv_cur.read_u16())
-                    var sig = cv_cur.read_bytes(sig_len)
-                    
-                    var th_arr_cv = sha256(self.transcript)
-                    var padded = List[UInt8]()
-                    for _ in range(64): padded.append(0x20)
-                    var context_str = "TLS 1.3, server CertificateVerify"
-                    for i in range(len(context_str)): padded.append(ord(context_str[i]))
-                    padded.append(0)
-                    for i in range(32): padded.append(th_arr_cv[i])
-                    
-                    if sig_alg == SIG_RSA_PSS_RSAE_SHA256:
-                        if not verify_rsa_pss_sha256(self.server_pubkey, padded, sig):
-                            raise Error("RSA PSS signature failed")
-                    elif sig_alg == SIG_RSA_PKCS1_SHA256:
-                        if not verify_rsa_pkcs1v15(self.server_pubkey, padded, sig):
-                            raise Error("RSA PKCS1 signature failed")
-                    elif sig_alg == SIG_ECDSA_SECP256R1_SHA256:
-                        var ph_arr = sha256(padded)
-                        var ph = List[UInt8](capacity=32)
-                        for i in range(32): ph.append(ph_arr[i])
-                        if not verify_ecdsa_p256_hash(self.server_pubkey, ph, sig):
-                            raise Error("ECDSA P256 signature failed")
+                if sig_alg == SIG_RSA_PSS_RSAE_SHA256:
+                    if not verify_rsa_pss_sha256(self.server_pubkey, padded, sig):
+                        raise Error("RSA PSS signature failed")
+                elif sig_alg == SIG_RSA_PKCS1_SHA256:
+                    if not verify_rsa_pkcs1v15(self.server_pubkey, padded, sig):
+                        raise Error("RSA PKCS1 signature failed")
+                elif sig_alg == SIG_ECDSA_SECP256R1_SHA256:
+                    var ph_arr = sha256(padded)
+                    var ph = List[UInt8]()
+                    for i in range(32): ph.append(ph_arr[i])
+                    if not verify_ecdsa_p256_hash(self.server_pubkey, ph, sig):
+                        raise Error("ECDSA P256 signature failed")
+            
+            elif msg.msg_type == HS_FINISHED:
+                var transcript_hash_fin = sha256(self.transcript)
+                var expected_fin = hmac_sha256(Span(self.keys.server_finished_key), Span(transcript_hash_fin))
+                for i in range(32):
+                    if msg.payload[i] != expected_fin[i]:
+                        raise Error("Server Finished mismatch")
                 
-                if hmt == HS_FINISHED:
-                    var transcript_hash_fin = sha256(self.transcript)
-                    var expected_fin = hmac_sha256(Span(self.keys.server_finished_key), Span(transcript_hash_fin))
-                    for i in range(32):
-                        if hbody[i] != expected_fin[i]:
-                            raise Error("Server Finished mismatch")
-                    
-                    for b in full: self.transcript.append(b)
-                    
-                    var derived2 = _tls13_hkdf_expand_label[32](
-                        Span(handshake_secret), "derived", Span(sha256(Span(List[UInt8]())))
-                    )
-                    var master = hkdf_extract(Span(derived2), Span(zeros(32)))
-                    self._derive_app_keys(master)
-                    got_finished = True
-                    break
+                self.transcript.extend(full)
+                var derived2 = _tls13_hkdf_expand_label[32](
+                    Span(self.handshake_secret), "derived", Span(sha256(Span(List[UInt8]())))
+                )
+                var master_arr = hkdf_extract(Span(derived2), Span(zeros(32)))
+                var master = List[UInt8]()
+                for i in range(32): master.append(master_arr[i])
+                self._derive_app_keys(Span(master))
+                got_finished = True
+                continue # Skip the general transcript update at the end
 
-                for b in full: self.transcript.append(b)
-                var nb = List[UInt8]()
-                for i in range(hc.pos, len(handshake_buf)): nb.append(handshake_buf[i])
-                handshake_buf = nb^
-                if got_finished: break
+            self.transcript.extend(full)
 
+        # 3. Send Client Finished
         var transcript_hash_f = sha256(self.transcript)
         var client_fin_verify = hmac_sha256(
             Span(self.keys.client_finished_key), Span(transcript_hash_f)
@@ -825,18 +970,20 @@ struct TLS13Client[T: TLSTransport](Movable):
         for i in range(32): fin_body.append(client_fin_verify[i])
         var fin_msg = _wrap_handshake(HS_FINISHED, fin_body)
         self.send_handshake(fin_msg, True)
-        for b in fin_msg: self.transcript.append(b)
+        self.transcript.extend(fin_msg)
 
         self.handshake_done = True
         return True
 
     fn write_app_data(mut self, plaintext: List[UInt8]) raises:
         """Encrypts and sends application data."""
+        var key = self.keys.client_app_key.copy()
+        var iv = self.keys.client_app_iv
         var record = self.encrypt_record(
             Span(plaintext),
             CONTENT_APPDATA,
-            self.keys.client_app_key,
-            self.keys.client_app_iv,
+            Span(key),
+            iv,
             self.app_seq_out,
         )
         self.app_seq_out += 1
@@ -853,10 +1000,12 @@ struct TLS13Client[T: TLSTransport](Movable):
                 continue
                 
             if r.content_type == CONTENT_APPDATA: # 23
+                var key = self.keys.server_app_key.copy()
+                var iv = self.keys.server_app_iv
                 var dec = self.decrypt_record(
                     r.payload,
-                    self.keys.server_app_key,
-                    self.keys.server_app_iv,
+                    Span(key),
+                    iv,
                     self.app_seq_in,
                 )
                 self.app_seq_in += 1
@@ -877,9 +1026,20 @@ struct TLS13Client[T: TLSTransport](Movable):
                 continue
 
 
-fn _bytes_to_bytes(list: List[UInt8]) -> Bytes:
-    """Converts a UInt8 list to a Lightbug Bytes object."""
-    var out = Bytes()
+fn _bytes_to_bytes(list: List[UInt8]) -> List[Byte]:
+
+
+    """Converts a UInt8 list to a Byte list."""
+
+
+    var out = List[Byte](capacity=len(list))
+
+
     for i in range(len(list)):
+
+
         out.append(Byte(list[i]))
+
+
     return out^
+
