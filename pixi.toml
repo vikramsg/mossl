@@ -28,7 +28,9 @@ test-all = { depends-on = ["test-crypto", "test-tls", "test-https", "test-pki", 
 mojo = ">=0.25.6,<0.26"
 lightbug_http = ">=0.25.6,<0.26"
 emberjson = ">=0.2.0"
+# TODO: Move these into seprate env 
 ripgrep = ">=15.1.0,<16"
+scapy = ">=2.7.0,<3"
 
 [feature.dev.pypi-dependencies]
 cryptography = "*"

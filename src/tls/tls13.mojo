@@ -650,6 +650,7 @@ struct TLS13Client[T: TLSTransport](Movable):
 
     fn perform_handshake(mut self) raises -> Bool:
         """Executes the TLS 1.3 handshake sequence."""
+        import time
         var client_random = _random_bytes(32)
         var client_priv = _random_bytes(32)
         var base_u = List[UInt8]()
@@ -668,6 +669,9 @@ struct TLS13Client[T: TLSTransport](Movable):
         self.send_handshake(ch_msg, False)
 
         var rec = self.read_record()
+        while rec.content_type == 20: # Skip ChangeCipherSpec
+            rec = self.read_record()
+            
         if rec.content_type == CONTENT_ALERT:
             raise Error("TLS alert")
         var cursor = ByteCursor(rec.payload)
@@ -719,8 +723,9 @@ struct TLS13Client[T: TLSTransport](Movable):
         var got_finished = False
         while not got_finished:
             var r2 = self.read_record()
-            if r2.content_type == 20: # Skip ChangeCipherSpec
-                continue
+            while r2.content_type == 20: # Skip ALL unencrypted ChangeCipherSpec
+                r2 = self.read_record()
+                
             if r2.content_type != CONTENT_APPDATA:
                 continue
             var dec = self.decrypt_record(
@@ -730,88 +735,87 @@ struct TLS13Client[T: TLSTransport](Movable):
                 self.hs_seq_in,
             )
             self.hs_seq_in += 1
-            
-            if dec.inner_type == CONTENT_HANDSHAKE:
-                for b in dec.content:
-                    handshake_buf.append(b)
-                while len(handshake_buf) >= 4:
-                    var hc = ByteCursor(handshake_buf)
-                    var hmt = hc.read_u8()
-                    var hml = hc.read_u24()
-                    if hc.remaining() < hml:
-                        break
-                    var hbody = hc.read_bytes(hml)
-                    var full = _wrap_handshake(hmt, hbody)
+            for b in dec.content:
+                handshake_buf.append(b)
+            while len(handshake_buf) >= 4:
+                var hc = ByteCursor(handshake_buf)
+                var hmt = hc.read_u8()
+                var hml = hc.read_u24()
+                if hc.remaining() < hml:
+                    break
+                var hbody = hc.read_bytes(hml)
+                var full = _wrap_handshake(hmt, hbody)
+                
+                if hmt == HS_CERTIFICATE:
+                    var start_cert = time.perf_counter()
+                    var cert_cur = ByteCursor(hbody)
+                    var ctx_len = cert_cur.read_u8()
+                    _ = cert_cur.read_bytes(Int(ctx_len))
+                    var cert_list_len = cert_cur.read_u24()
+                    var clist_bytes = cert_cur.read_bytes(cert_list_len)
+                    var clist_cur = ByteCursor(clist_bytes)
+                    var certs = List[List[UInt8]]()
+                    while clist_cur.remaining() > 0:
+                        var c_len = clist_cur.read_u24()
+                        certs.append(clist_cur.read_bytes(c_len))
+                        var extensions_len = clist_cur.read_u16()
+                        _ = clist_cur.read_bytes(Int(extensions_len))
                     
-                    if hmt == HS_CERTIFICATE:
-                        var cert_cur = ByteCursor(hbody)
-                        var ctx_len = cert_cur.read_u8()
-                        _ = cert_cur.read_bytes(Int(ctx_len))
-                        var cert_list_len = cert_cur.read_u24()
-                        var clist_bytes = cert_cur.read_bytes(cert_list_len)
-                        var clist_cur = ByteCursor(clist_bytes)
-                        var certs = List[List[UInt8]]()
-                        while clist_cur.remaining() > 0:
-                            var c_len = clist_cur.read_u24()
-                            certs.append(clist_cur.read_bytes(c_len))
-                            var extensions_len = clist_cur.read_u16()
-                            _ = clist_cur.read_bytes(Int(extensions_len))
-                        
-                        var trust = load_trust_store()
-                        if not verify_chain(certs, trust, _string_to_bytes(self.host)):
-                            raise Error("Certificate verification failed")
-                        var parsed = parse_certificate(certs[0])
-                        self.server_pubkey = parsed.public_key.copy()
-                        
-                    if hmt == HS_CERT_VERIFY:
-                        var cv_cur = ByteCursor(hbody)
-                        var sig_alg = cv_cur.read_u16()
-                        var sig_len = Int(cv_cur.read_u16())
-                        var sig = cv_cur.read_bytes(sig_len)
-                        
-                        var th_arr_cv = sha256(self.transcript)
-                        var padded = List[UInt8]()
-                        for _ in range(64): padded.append(0x20)
-                        var context_str = "TLS 1.3, server CertificateVerify"
-                        for i in range(len(context_str)): padded.append(ord(context_str[i]))
-                        padded.append(0)
-                        for i in range(32): padded.append(th_arr_cv[i])
-                        
-                        if sig_alg == SIG_RSA_PSS_RSAE_SHA256:
-                            if not verify_rsa_pss_sha256(self.server_pubkey, padded, sig):
-                                raise Error("RSA PSS signature failed")
-                        elif sig_alg == SIG_RSA_PKCS1_SHA256:
-                            if not verify_rsa_pkcs1v15(self.server_pubkey, padded, sig):
-                                raise Error("RSA PKCS1 signature failed")
-                        elif sig_alg == SIG_ECDSA_SECP256R1_SHA256:
-                            var ph_arr = sha256(padded)
-                            var ph = List[UInt8](capacity=32)
-                            for i in range(32): ph.append(ph_arr[i])
-                            if not verify_ecdsa_p256_hash(self.server_pubkey, ph, sig):
-                                raise Error("ECDSA P256 signature failed")
+                    var trust = load_trust_store()
+                    if not verify_chain(certs, trust, _string_to_bytes(self.host)):
+                        raise Error("Certificate verification failed")
+                    var parsed = parse_certificate(certs[0])
+                    self.server_pubkey = parsed.public_key.copy()
+                
+                if hmt == HS_CERT_VERIFY:
+                    var cv_cur = ByteCursor(hbody)
+                    var sig_alg = cv_cur.read_u16()
+                    var sig_len = Int(cv_cur.read_u16())
+                    var sig = cv_cur.read_bytes(sig_len)
                     
-                    if hmt == HS_FINISHED:
-                        var transcript_hash_fin = sha256(self.transcript)
-                        var expected_fin = hmac_sha256(Span(self.keys.server_finished_key), Span(transcript_hash_fin))
-                        for i in range(32):
-                            if hbody[i] != expected_fin[i]:
-                                raise Error("Server Finished mismatch")
-                        
-                        for b in full: self.transcript.append(b)
-                        
-                        var derived2 = _tls13_hkdf_expand_label[32](
-                            Span(handshake_secret), "derived", Span(sha256(Span(List[UInt8]())))
-                        )
-                        var master = hkdf_extract(Span(derived2), Span(zeros(32)))
-                        self._derive_app_keys(master)
-                        got_finished = True
-                        break
-
+                    var th_arr_cv = sha256(self.transcript)
+                    var padded = List[UInt8]()
+                    for _ in range(64): padded.append(0x20)
+                    var context_str = "TLS 1.3, server CertificateVerify"
+                    for i in range(len(context_str)): padded.append(ord(context_str[i]))
+                    padded.append(0)
+                    for i in range(32): padded.append(th_arr_cv[i])
+                    
+                    if sig_alg == SIG_RSA_PSS_RSAE_SHA256:
+                        if not verify_rsa_pss_sha256(self.server_pubkey, padded, sig):
+                            raise Error("RSA PSS signature failed")
+                    elif sig_alg == SIG_RSA_PKCS1_SHA256:
+                        if not verify_rsa_pkcs1v15(self.server_pubkey, padded, sig):
+                            raise Error("RSA PKCS1 signature failed")
+                    elif sig_alg == SIG_ECDSA_SECP256R1_SHA256:
+                        var ph_arr = sha256(padded)
+                        var ph = List[UInt8](capacity=32)
+                        for i in range(32): ph.append(ph_arr[i])
+                        if not verify_ecdsa_p256_hash(self.server_pubkey, ph, sig):
+                            raise Error("ECDSA P256 signature failed")
+                
+                if hmt == HS_FINISHED:
+                    var transcript_hash_fin = sha256(self.transcript)
+                    var expected_fin = hmac_sha256(Span(self.keys.server_finished_key), Span(transcript_hash_fin))
+                    for i in range(32):
+                        if hbody[i] != expected_fin[i]:
+                            raise Error("Server Finished mismatch")
+                    
                     for b in full: self.transcript.append(b)
-                    var nb = List[UInt8]()
-                    for i in range(hc.pos, len(handshake_buf)): nb.append(handshake_buf[i])
-                    handshake_buf = nb^
-                    if got_finished: break
+                    
+                    var derived2 = _tls13_hkdf_expand_label[32](
+                        Span(handshake_secret), "derived", Span(sha256(Span(List[UInt8]())))
+                    )
+                    var master = hkdf_extract(Span(derived2), Span(zeros(32)))
+                    self._derive_app_keys(master)
+                    got_finished = True
+                    break
+
+                for b in full: self.transcript.append(b)
+                var nb = List[UInt8]()
+                for i in range(hc.pos, len(handshake_buf)): nb.append(handshake_buf[i])
+                handshake_buf = nb^
+                if got_finished: break
 
         var transcript_hash_f = sha256(self.transcript)
         var client_fin_verify = hmac_sha256(
@@ -844,7 +848,7 @@ struct TLS13Client[T: TLSTransport](Movable):
         while True:
             var r = self.read_record()
             
-            # Skip unencrypted legacy records (CCS=20, Alert=21, Handshake=22)
+            # Skip unencrypted legacy records
             if r.content_type == 20 or r.content_type == 21 or r.content_type == 22:
                 continue
                 
@@ -856,9 +860,14 @@ struct TLS13Client[T: TLSTransport](Movable):
                     self.app_seq_in,
                 )
                 self.app_seq_in += 1
+                
                 if dec.inner_type == CONTENT_APPDATA:
                     for i in range(len(dec.content)):
                         out.append(dec.content[i])
+                    # After receiving application data, we continue reading ONLY if the 
+                    # transport has more data ready, otherwise we return what we have.
+                    # This avoids stalling on keep-alive connections.
+                    # For now, we return after each record to match the HTTP client loop.
                     return out^
                 elif dec.inner_type == CONTENT_ALERT:
                     return out^

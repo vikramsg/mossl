@@ -254,10 +254,11 @@ struct PointJac[N: Int](Copyable, ImplicitlyCopyable, Movable):
 fn _from_affine[
     N: Int
 ](x: UIntLimbs[N], y: UIntLimbs[N], ctx: FieldContext[N]) -> PointJac[N]:
-    var z = ctx.one
+    # Convert affine coordinates to Montgomery form: (x * R^2) * R^-1 = x * R mod m
     var x_mont = _mont_mul(x, ctx.r2, ctx.m, ctx.n0_inv)
     var y_mont = _mont_mul(y, ctx.r2, ctx.m, ctx.n0_inv)
-    return PointJac(x_mont, y_mont, z)
+    # Z = 1 in Montgomery form is R mod m (stored in ctx.one)
+    return PointJac(x_mont, y_mont, ctx.one)
 
 
 fn _to_affine[N: Int](p: PointJac[N], ctx: FieldContext[N]) -> PointJac[N]:
@@ -268,11 +269,14 @@ fn _to_affine[N: Int](p: PointJac[N], ctx: FieldContext[N]) -> PointJac[N]:
     var z2 = _mont_sqr(z_inv, ctx.m, ctx.n0_inv)
     var z3 = _mont_mul(z2, z_inv, ctx.m, ctx.n0_inv)
 
-    var x = _mont_mul(p.x, z2, ctx.m, ctx.n0_inv)
-    var y = _mont_mul(p.y, z3, ctx.m, ctx.n0_inv)
+    # These are still in Montgomery form (X*R, Y*R)
+    var x_mont = _mont_mul(p.x, z2, ctx.m, ctx.n0_inv)
+    var y_mont = _mont_mul(p.y, z3, ctx.m, ctx.n0_inv)
 
-    x = _mont_mul(x, UIntLimbs[N](1), ctx.m, ctx.n0_inv)
-    y = _mont_mul(y, UIntLimbs[N](1), ctx.m, ctx.n0_inv)
+    # Convert back from Montgomery form: (x * R) * 1 * R^-1 = x mod m
+    var literal_one = UIntLimbs[N](1)
+    var x = _mont_mul(x_mont, literal_one, ctx.m, ctx.n0_inv)
+    var y = _mont_mul(y_mont, literal_one, ctx.m, ctx.n0_inv)
 
     return PointJac(x, y, UIntLimbs[N](0))
 
@@ -438,8 +442,10 @@ fn verify_generic[
     var two = UIntLimbs[N](2)
     var n_minus_2 = _sub_limbs(scalar_ctx.m, two)
 
-    # s to mont
+    # Convert s to mont: s * R mod n
     var s_mont = _mont_mul(s, scalar_ctx.r2, scalar_ctx.m, scalar_ctx.n0_inv)
+    
+    # s^-1 in mont form (already uses scalar_ctx.one which is R mod n)
     var w_mont = _mont_pow(
         s_mont, n_minus_2, scalar_ctx.m, scalar_ctx.n0_inv, scalar_ctx.one
     )
@@ -450,9 +456,10 @@ fn verify_generic[
     var u1_mont = _mont_mul(h_mont, w_mont, scalar_ctx.m, scalar_ctx.n0_inv)
     var u2_mont = _mont_mul(r_mont, w_mont, scalar_ctx.m, scalar_ctx.n0_inv)
 
-    # From mont to normal
-    var u1 = _mont_mul(u1_mont, UIntLimbs[N](1), scalar_ctx.m, scalar_ctx.n0_inv)
-    var u2 = _mont_mul(u2_mont, UIntLimbs[N](1), scalar_ctx.m, scalar_ctx.n0_inv)
+    # From mont to normal: (x * R) * 1 * R^-1 = x mod n
+    var literal_one = UIntLimbs[N](1)
+    var u1 = _mont_mul(u1_mont, literal_one, scalar_ctx.m, scalar_ctx.n0_inv)
+    var u2 = _mont_mul(u2_mont, literal_one, scalar_ctx.m, scalar_ctx.n0_inv)
 
     var G = _from_affine(gx, gy, ctx)
     var Q = _from_affine(pub_x, pub_y, ctx)
