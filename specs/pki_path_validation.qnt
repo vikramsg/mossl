@@ -33,7 +33,8 @@ module pki_path_validation {
     id: int,
     subject: str,
     issuer: str,
-    public_key_id: int,
+    public_key_id: int,    // The public key IN this certificate
+    authority_key_id: int, // The public key used to SIGN this certificate
     /**
      * Basic Constraints: represents whether the certificate is a CA.
      * - is_ca: true  => Intermediate/Root; authorized to sign other certificates.
@@ -72,7 +73,7 @@ module pki_path_validation {
 
   // Pure functions
   pure def is_signed_by(cert: Certificate, issuer: Certificate): bool = {
-    cert.issuer == issuer.subject and cert.public_key_id == issuer.public_key_id
+    cert.issuer == issuer.subject and cert.authority_key_id == issuer.public_key_id
   }
 
   pure def is_valid_at(cert: Certificate, time: int): bool = {
@@ -86,7 +87,7 @@ module pki_path_validation {
     (validation_status == Valid) implies 
       trust_store.exists(root => 
         val last_cert = current_chain[current_step - 1]
-        last_cert.issuer == root.subject and last_cert.public_key_id == root.public_key_id
+        last_cert.issuer == root.subject and last_cert.authority_key_id == root.public_key_id
       )
 
   // 2. Every certificate in a valid chain (except the leaf) MUST be a CA
@@ -127,7 +128,7 @@ module pki_path_validation {
       } else {
         all {
           trust_store' = Set(example_root),
-          current_chain' = [example_leaf, { id: 1, subject: "WrongSubject", issuer: "Root", public_key_id: 101, is_ca: true, not_before: 0, not_after: 1000 }],
+          current_chain' = [example_leaf, { id: 1, subject: "WrongSubject", issuer: "Root", public_key_id: 101, authority_key_id: 100, is_ca: true, not_before: 0, not_after: 1000 }],
         }
       },
       validation_status' = Pending,
@@ -167,7 +168,6 @@ module pki_path_validation {
     keep_state,
   }
 
-  // SUCCESS: Found a trusted root with matching signature
   action handle_root_success: bool = {
     val cert = current_chain[current_step]
     val matching_roots = trust_store.filter(r => r.subject == cert.issuer)
@@ -175,11 +175,14 @@ module pki_path_validation {
       validation_status == Pending,
       current_step < current_chain.length(),
       matching_roots.size() > 0,
-      cert.public_key_id == matching_roots.chooseSome().public_key_id,
-      validation_status' = Valid,
-      current_step' = current_step + 1,
-      timeout_steps' = timeout_steps + 1,
-      keep_state,
+      nondet root = matching_roots.oneOf()
+      all {
+        cert.authority_key_id == root.public_key_id,
+        validation_status' = Valid,
+        current_step' = current_step + 1,
+        timeout_steps' = timeout_steps + 1,
+        keep_state,
+      }
     }
   }
 
@@ -191,11 +194,14 @@ module pki_path_validation {
       validation_status == Pending,
       current_step < current_chain.length(),
       matching_roots.size() > 0,
-      cert.public_key_id != matching_roots.chooseSome().public_key_id,
-      validation_status' = Signature_Failure,
-      current_step' = current_step + 1,
-      timeout_steps' = timeout_steps + 1,
-      keep_state,
+      nondet root = matching_roots.oneOf()
+      all {
+        cert.authority_key_id != root.public_key_id,
+        validation_status' = Signature_Failure,
+        current_step' = current_step + 1,
+        timeout_steps' = timeout_steps + 1,
+        keep_state,
+      }
     }
   }
 
@@ -210,7 +216,7 @@ module pki_path_validation {
       val next_cert = current_chain[current_step + 1]
       all {
         cert.issuer == next_cert.subject,
-        cert.public_key_id == next_cert.public_key_id,
+        cert.authority_key_id == next_cert.public_key_id,
         next_cert.is_ca,
         validation_status' = Pending,
         current_step' = current_step + 1,
@@ -247,7 +253,7 @@ module pki_path_validation {
       val next_cert = current_chain[current_step + 1]
       all {
         cert.issuer == next_cert.subject,
-        cert.public_key_id != next_cert.public_key_id,
+        cert.authority_key_id != next_cert.public_key_id,
         validation_status' = Signature_Failure,
         current_step' = current_step + 1,
         timeout_steps' = timeout_steps + 1,
@@ -267,7 +273,7 @@ module pki_path_validation {
       val next_cert = current_chain[current_step + 1]
       all {
         cert.issuer == next_cert.subject,
-        cert.public_key_id == next_cert.public_key_id,
+        cert.authority_key_id == next_cert.public_key_id,
         not(next_cert.is_ca),
         validation_status' = Not_A_CA,
         current_step' = current_step + 1,
@@ -304,14 +310,14 @@ module pki_path_validation {
   }
 
   // Helpers for trace generation
-  val example_root = { id: 0, subject: "Root", issuer: "Root", public_key_id: 100, is_ca: true, not_before: 0, not_after: 1000 }
-  val example_inter = { id: 1, subject: "Inter", issuer: "Root", public_key_id: 101, is_ca: true, not_before: 0, not_after: 1000 }
-  val example_leaf = { id: 2, subject: "Leaf", issuer: "Inter", public_key_id: 102, is_ca: false, not_before: 0, not_after: 1000 }
+  val example_root = { id: 0, subject: "Root", issuer: "Root", public_key_id: 100, authority_key_id: 100, is_ca: true, not_before: 0, not_after: 1000 }
+  val example_inter = { id: 1, subject: "Inter", issuer: "Root", public_key_id: 101, authority_key_id: 100, is_ca: true, not_before: 0, not_after: 1000 }
+  val example_leaf = { id: 2, subject: "Leaf", issuer: "Inter", public_key_id: 102, authority_key_id: 101, is_ca: false, not_before: 0, not_after: 1000 }
 
   run valid_chain_trace = {
     setup(Set(example_root), [example_leaf, example_inter], 500)
-    .then(validate_step) // Validates leaf signed by inter
-    .then(validate_step) // Validates inter signed by root
+    .then(validate_step) // Leaf -> Inter
+    .then(validate_step) // Inter -> Root
   }
 
   run untrusted_root_trace = {
@@ -321,7 +327,7 @@ module pki_path_validation {
   }
 
   run mismatch_issuer_trace = {
-    val bad_inter = { id: 1, subject: "WrongSubject", issuer: "Root", public_key_id: 101, is_ca: true, not_before: 0, not_after: 1000 }
+    val bad_inter = { id: 1, subject: "WrongSubject", issuer: "Root", public_key_id: 101, authority_key_id: 100, is_ca: true, not_before: 0, not_after: 1000 }
     setup(Set(example_root), [example_leaf, bad_inter], 500)
     .then(validate_step)
   }
