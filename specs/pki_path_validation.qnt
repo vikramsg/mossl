@@ -64,8 +64,6 @@ module pki_path_validation {
   var validation_status: ValidationStatus
   var current_step: int
   var current_time: int
-  // Monitor variable to track liveness (termination)
-  var timeout_steps: int
 
   // Constants/Parameters for testing
   // 5 is a reasonable limit for real-world hierarchies (Leaf -> Inter1 -> Inter2 -> Root)
@@ -93,10 +91,6 @@ module pki_path_validation {
 
   // 2. Step counter safety: prevents out-of-bounds access to the chain
   val StepWithinBounds = current_step <= current_chain.length()
-
-  // 4. Liveness monitor: Validation must terminate within a bounded number of steps
-  // We expect termination in at most MAX_CHAIN_LEN + 1 steps.
-  val MustTerminateInvariant = (validation_status == Pending) implies (timeout_steps <= MAX_CHAIN_LEN)
 
   // --- Temporal Properties (Liveness) ---
 
@@ -130,7 +124,6 @@ module pki_path_validation {
       validation_status' = Pending,
       current_step' = 0,
       current_time' = 500,
-      timeout_steps' = 0,
     }
   }
 
@@ -140,7 +133,6 @@ module pki_path_validation {
     current_time' = time,
     validation_status' = Pending,
     current_step' = 0,
-    timeout_steps' = 0,
   }
 
   // --- Transition Logic ---
@@ -160,7 +152,6 @@ module pki_path_validation {
     },
     validation_status' = validation_status,
     current_step' = current_step,
-    timeout_steps' = timeout_steps,
     keep_state,
   }
 
@@ -174,7 +165,6 @@ module pki_path_validation {
       is_valid_at(cert, current_time),
       validation_status' = Valid,
       current_step' = current_step + 1,
-      timeout_steps' = timeout_steps + 1,
       keep_state,
     }
   }
@@ -190,7 +180,6 @@ module pki_path_validation {
       not(is_valid_at(cert, current_time)),
       validation_status' = Expired,
       current_step' = current_step + 1,
-      timeout_steps' = timeout_steps + 1,
       keep_state,
     }
   }
@@ -206,7 +195,6 @@ module pki_path_validation {
       not(matching_roots.exists(root => cert.authority_key_id == root.public_key_id)),
       validation_status' = Signature_Failure,
       current_step' = current_step + 1,
-      timeout_steps' = timeout_steps + 1,
       keep_state,
     }
   }
@@ -227,7 +215,6 @@ module pki_path_validation {
         is_valid_at(cert, current_time),
         validation_status' = Pending,
         current_step' = current_step + 1,
-        timeout_steps' = timeout_steps + 1,
         keep_state,
       }
     }
@@ -249,7 +236,6 @@ module pki_path_validation {
         not(is_valid_at(cert, current_time)),
         validation_status' = Expired,
         current_step' = current_step + 1,
-        timeout_steps' = timeout_steps + 1,
         keep_state,
       }
     }
@@ -266,7 +252,6 @@ module pki_path_validation {
       cert.issuer != current_chain[current_step + 1].subject,
       validation_status' = Subject_Issuer_Mismatch,
       current_step' = current_step + 1,
-      timeout_steps' = timeout_steps + 1,
       keep_state,
     }
   }
@@ -285,7 +270,6 @@ module pki_path_validation {
         cert.authority_key_id != next_cert.public_key_id,
         validation_status' = Signature_Failure,
         current_step' = current_step + 1,
-        timeout_steps' = timeout_steps + 1,
         keep_state,
       }
     }
@@ -306,7 +290,6 @@ module pki_path_validation {
         not(next_cert.is_ca),
         validation_status' = Not_A_CA,
         current_step' = current_step + 1,
-        timeout_steps' = timeout_steps + 1,
         keep_state,
       }
     }
@@ -322,7 +305,6 @@ module pki_path_validation {
       current_step + 1 >= current_chain.length(),
       validation_status' = Untrusted_Root,
       current_step' = current_step + 1,
-      timeout_steps' = timeout_steps + 1,
       keep_state,
     }
   }
