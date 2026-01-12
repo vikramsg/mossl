@@ -20,6 +20,10 @@ This document serves as a central reference for tracking Mojo's evolving syntax 
     - **Variant Compatibility**: To use a type in `utils.Variant`, it must conform to `Movable` and `Copyable`. If the type is not `ImplicitlyCopyable`, you must use the transfer operator `^` or an explicit `.copy()` when initializing the `Variant`.
 - **Syntactic Sugar**: Be aware that manual `for` loops with `append` currently outperform list comprehensions in performance-critical sections.
 - **Function Inlining**: Use `@always_inline` for small, frequently called helper functions to eliminate call overhead, especially in deep call stacks.
+- **Data Structures & Typeclasses (Traits)**: 
+    - Use **Traits** as the direct equivalent of **Typeclasses** for static dispatch and defining shared behavior.
+    - **Frozen Dataclass**: Achieve "frozen" behavior by using `var` fields without providing setters, and using the `read` (default) convention for methods.
+    - **Static Dispatch**: Use trait bounds (e.g., `[T: Summarizable]`) to allow the compiler to generate specialized, zero-overhead function versions for each type at compile-time.
 - **Variants**: Use `utils.Variant` for explicit success/error returns and typestate transitions. Mojo's stdlib uses `Variant` (see `std/utils/variant.mojo` and `std/runtime/tracing.mojo`) to keep invalid states unrepresentable and to make error handling explicit.
 
 ---
@@ -36,6 +40,7 @@ This document serves as a central reference for tracking Mojo's evolving syntax 
 | **Memory** | `List` vs `UnsafePointer` | `List` | **Comparable** | 0.0052 vs 0.0053 |
 | **Arguments** | `read` vs `var` | `read` | **High efficiency** | ~0.0005 |
 | **Specialization**| `@parameter` vs Runtime | `@parameter` | **~34% faster** | 0.0007 vs 0.0010 |
+| **Typeclasses** | Static Dispatch | `N/A` | **Zero Overhead** | ~0.0006 |
 | **Traits** | `ImplicitlyCopyable` | `N/A` | **Syntactic Sugar** | ~0.0006 |
 | **Syntactic Sugar**| Comprehension vs Append | Manual Append | **~33% faster** | 0.0013 vs 0.0018 |
 
@@ -159,7 +164,14 @@ This document serves as a central reference for tracking Mojo's evolving syntax 
 | `@always_inline` | 0.00000066 |
 | Standard Function | 0.00000054 |
 
-### 11. Variants and Typestate
+### 11. Data Structures & Typeclasses (Traits)
+**File:** `syntax_typeclasses.mojo`
+
+- **Concepts**: Mojo uses **Traits** to define shared behavior (Typeclasses). Generic functions use **Static Dispatch** to call trait methods, meaning the compiler specializes the function for each type at compile-time, resulting in zero runtime overhead (no vtables).
+- **Frozen Pattern**: While `let` for struct fields is currently deprecated, immutability is enforced by using `var` fields without setters and leveraging the default `read` (immutable reference) convention for methods.
+- **Composition**: Generic types (like `Wrapper[T]`) can interact with trait-based logic through standalone generic functions or specialized method calls, allowing for powerful, typesafe composition.
+
+### 12. Variants and Typestate
 **File:** `syntax_variant.mojo`
 
 - **Use Case**: Explicit success/error unions and typestate transitions without exceptions.
