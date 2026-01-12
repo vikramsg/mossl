@@ -5,16 +5,38 @@
 - Keep parsing and validation deterministic, testable, and trace-verified.
 - Provide precise failure reasons for TLS error reporting.
 
+## Code Review Conclusions (Current Gaps)
+- Missing validity, BasicConstraints, KeyUsage, and EKU checks allow expired or non-CA chains to validate if signatures link.
+- Chain building matches only CN bytes; ignores full DN and AKID/SKID, so parent selection can be wrong or ambiguous.
+- Hostname verification is too permissive (CN fallback even with SAN, wildcard rules too loose, case sensitivity).
+- Signature algorithm consistency inside TBSCertificate is not enforced.
+- Silent exception handling exists in SAN parsing and trust store loading; this violates project rules and hides malformed data.
+
+## POC Review Conclusions (@poc)
+- Spec includes Invalid_Chain and timeout_steps, but the POC omits both, so those behaviors are not exercised.
+- POC uses ordered dispatch instead of spec nondeterminism; traces could diverge if multiple actions are enabled.
+- Mock hashing can collide, so replayed traces can conflate distinct subjects/issuers.
+
+## Spec vs Code Strictness
+- The spec should include invalid states to prove correct failure handling and to generate negative traces.
+- The implementation can be stricter (reject more malformed input), but it should still surface the same failure classes rather than remove them.
+- Removing invalid states from the spec would weaken coverage and make it easier to miss regressions.
+
+## timeout_steps in Spec
+- timeout_steps was only for tractable liveness bounds; it is not required for the implementation.
+- The spec can drop timeout_steps if liveness is still provable via temporal properties and simulations still terminate.
+- After removing timeout_steps, keep EventuallyTerminates and StepWithinBounds to preserve termination and bounds safety.
+
 ## Data Model
 - ParsedCertificate (zero-copy view over DER):
   - Raw DER slice, TBS slice, signature algo OID, signature bits.
   - Subject DN (full), Issuer DN (full).
-  - SubjectPublicKeyInfo (SPKI), Subject Key Identifier (SKID), Authority Key Identifier (AKID).
+  - SPKI, SKID, AKID.
   - Validity (notBefore, notAfter) as unix seconds.
   - Extensions: BasicConstraints (is_ca, path_len), KeyUsage, ExtendedKeyUsage,
     SubjectAltName (DNS/IP), NameConstraints (optional), PolicyConstraints (optional).
 - TrustStore:
-  - Indexed by subject DN and by SKID for O(1) candidate lookup.
+  - Indexed by subject DN and SKID for O(1) candidate lookup.
   - Track trust anchors with constraints (if present).
 
 ## Parsing (ASN.1/DER)
