@@ -1,18 +1,18 @@
 from utils import Variant
 
 @fieldwise_init
-struct ValidationInProgress:
+struct ValidationInProgress(Copyable, Movable):
     var step: Int
 
 
 @fieldwise_init
-struct ValidationSuccess:
+struct ValidationSuccess(Copyable, Movable):
     var value: Int
 
 
 @fieldwise_init
-struct ValidationFailure:
-    var message: String
+struct ValidationFailure(Copyable, Movable):
+    var message: StaticString
 
 
 alias ValidationState = Variant[
@@ -49,6 +49,6 @@ fn main() raises:
 
     var state = ValidationState(ValidationInProgress(0))
     if state.isa[ValidationInProgress]():
-        state = advance_state(state.unsafe_take[ValidationInProgress]()^)
+        state = advance_state(state.unsafe_take[ValidationInProgress]())
     if state.isa[ValidationSuccess]():
         print("Validated:", state[ValidationSuccess].value)

@@ -119,15 +119,19 @@ struct ValidationInProgress(Movable, Copyable):
         self.chain = other.chain^
 
 struct ValidationSuccess(Movable, Copyable):
+    var step: Int
     var chain: List[MockCertificate]
 
-    fn __init__(out self, var chain: List[MockCertificate]):
+    fn __init__(out self, step: Int, var chain: List[MockCertificate]):
+        self.step = step
         self.chain = chain^
 
     fn __copyinit__(out self, read other: Self):
+        self.step = other.step
         self.chain = other.chain.copy()
 
     fn __moveinit__(out self, deinit other: Self):
+        self.step = other.step
         self.chain = other.chain^
 
 struct ValidationFailure(Movable, Copyable):
@@ -164,7 +168,7 @@ fn handle_root_success(read current: ValidationInProgress, read trust_store: Lis
         if cert.issuer == root.subject:
             if cert.authority_key_id == root.public_key_id:
                 if (current_time >= cert.not_before and current_time <= cert.not_after):
-                    return ValidatorState(ValidationSuccess(current.chain.copy()))
+                    return ValidatorState(ValidationSuccess(current.step + 1, current.chain.copy()))
     return None
 
 @always_inline
@@ -319,8 +323,7 @@ struct TypestatePKIValidator:
         if self.state.isa[ValidationInProgress]():
             return self.state[ValidationInProgress].step
         if self.state.isa[ValidationSuccess]():
-            # In Success, step is implicitly at the end
-            return len(self.state[ValidationSuccess].chain)
+            return self.state[ValidationSuccess].step
         if self.state.isa[ValidationFailure]():
             return self.state[ValidationFailure].step
         return -1
