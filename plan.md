@@ -22,6 +22,13 @@
 - The implementation can be stricter (reject more malformed input), but it should still surface the same failure classes rather than remove them.
 - Removing invalid states from the spec would weaken coverage and make it easier to miss regressions.
 
+## Implementation Pattern (Typestate + Boundary Validation)
+- Keep invalid inputs representable at the boundary; make invalid internal states unrepresentable.
+- Use a typestate model with `Variant` states such as `ValidationInProgress`, `ValidationSuccess`, and `ValidationFailure`.
+- Make transitions consume ownership (`var` + `^`) to prevent stale state reuse and encode progress in types.
+- Expose only `Result[ValidatedChain, PkiError]` to TLS; prevent constructing `ValidatedChain` directly.
+- Unit tests target the validator boundary (raw DER, bad issuer order, invalid signature, expired, missing EKU) and assert error variants.
+
 ## timeout_steps in Spec
 - timeout_steps was only for tractable liveness bounds; it is not required for the implementation.
 - The spec can drop timeout_steps if liveness is still provable via temporal properties and simulations still terminate.
@@ -84,4 +91,3 @@
 - Update TLS handshake certificate validation to use new Result type and surface
   errors in alerts/logging.
 - Keep trust store loading configurable; support system store + pinned roots.
-

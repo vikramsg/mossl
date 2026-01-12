@@ -34,6 +34,37 @@ fn test_implicit_copy():
         # Compiler inserts .copy() automatically
         consume_var_implicit(x)
 
+# --- Complex Structs and Variant Compatibility ---
+# Structs containing non-ImplicitlyCopyable types (like List) require
+# manual trait implementations. They cannot be ImplicitlyCopyable because
+# the compiler won't synthesize a deep copy for a heap-allocated field.
+
+from utils import Variant
+
+struct ComplexState(Movable, Copyable):
+    var l: List[Int]
+
+    fn __init__(out self, var l: List[Int]):
+        self.l = l^
+
+    fn __copyinit__(out self, read other: Self):
+        # Manual deep copy required for the List
+        self.l = other.l.copy()
+
+    fn __moveinit__(out self, deinit other: Self):
+        # Manual move required for the List
+        self.l = other.l^
+
+fn test_variant_with_complex_state():
+    var l = List[Int](1, 2, 3)
+    var state = ComplexState(l^)
+    
+    # Variant requires its types to be Copyable and Movable.
+    # Because ComplexState is NOT ImplicitlyCopyable, we MUST use '^' (move)
+    # or '.copy()' (explicit deep copy) when initializing the Variant.
+    var v = Variant[ComplexState](state^)
+    keep(len(v[ComplexState].l))
+
 fn main() raises:
     print("--- ImplicitlyCopyable vs Explicit Copying ---")
     

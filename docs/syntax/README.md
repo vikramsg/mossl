@@ -14,9 +14,13 @@ This document serves as a central reference for tracking Mojo's evolving syntax 
 - **Collections**: Pre-allocate `List` capacity whenever the size is known to avoid expensive reallocations. `List` with capacity is highly competitive with `InlineArray`.
 - **Compile-Time Specialization**: Use `@parameter` to evaluate variables at compile-time, allowing the compiler to generate optimized constants and specialized code paths.
 - **SIMD**: Use `simd_width_of[DType]()` to write portable code that automatically scales to the target hardware's register width.
-- **Traits**: Use `ImplicitlyCopyable` only for small, cheap-to-copy types to enable cleaner syntax; avoid it for heap-allocated types to prevent hidden performance costs.
+- **Traits**: 
+    - Use `ImplicitlyCopyable` only for small, cheap-to-copy types to enable cleaner syntax; avoid it for heap-allocated types to prevent hidden performance costs.
+    - **Non-Trivial Types**: Structs containing `List` or other heap-allocated data cannot automatically synthesize `__copyinit__`. You must manually implement `__copyinit__` (using `.copy()`) and `__moveinit__` (using `^`).
+    - **Variant Compatibility**: To use a type in `utils.Variant`, it must conform to `Movable` and `Copyable`. If the type is not `ImplicitlyCopyable`, you must use the transfer operator `^` or an explicit `.copy()` when initializing the `Variant`.
 - **Syntactic Sugar**: Be aware that manual `for` loops with `append` currently outperform list comprehensions in performance-critical sections.
 - **Function Inlining**: Use `@always_inline` for small, frequently called helper functions to eliminate call overhead, especially in deep call stacks.
+- **Variants**: Use `utils.Variant` for explicit success/error returns and typestate transitions. Mojo's stdlib uses `Variant` (see `std/utils/variant.mojo` and `std/runtime/tracing.mojo`) to keep invalid states unrepresentable and to make error handling explicit.
 
 ---
 
@@ -154,6 +158,12 @@ This document serves as a central reference for tracking Mojo's evolving syntax 
 | :--- | :--- |
 | `@always_inline` | 0.00000066 |
 | Standard Function | 0.00000054 |
+
+### 11. Variants and Typestate
+**File:** `syntax_variant.mojo`
+
+- **Use Case**: Explicit success/error unions and typestate transitions without exceptions.
+- **Why**: `Variant` is the standard Mojo sum type in the stdlib (see `std/utils/variant.mojo`) and is used in core code (e.g., `std/runtime/tracing.mojo`) to constrain allowed values and avoid invalid states at compile time.
 
 ## Methodology
 Benchmarks were conducted using the Mojo `benchmark` module with `max_runtime_secs=0.5`. Each result represents the mean latency for the specified workload. Values were verified on Sunday, January 11, 2026.
