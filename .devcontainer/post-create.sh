@@ -64,8 +64,8 @@ if [ -f "$HOME_DIR/.npmrc" ]; then
 fi
 
 if command -v npm &> /dev/null; then
-    echo "Installing Gemini CLI..." >> $LOG_FILE
-    npm install -g @google/gemini-cli @openai/codex >> $LOG_FILE 2>&1
+    echo "Installing Gemini CLI and opencode..." >> $LOG_FILE
+    npm install -g @google/gemini-cli @openai/codex opencode-ai >> $LOG_FILE 2>&1
 else
     echo "Warning: npm not found." >> $LOG_FILE
 fi

@@ -177,5 +177,24 @@ This document serves as a central reference for tracking Mojo's evolving syntax 
 - **Use Case**: Explicit success/error unions and typestate transitions without exceptions.
 - **Why**: `Variant` is the standard Mojo sum type in the stdlib (see `std/utils/variant.mojo`) and is used in core code (e.g., `std/runtime/tracing.mojo`) to constrain allowed values and avoid invalid states at compile time.
 
+**Result-style Example (String/Error)**: This pattern is documented in the stdlib and is the recommended way to make error handling explicit without exceptions.
+
+```mojo
+from utils import Variant
+
+comptime Result = Variant[String, Error]
+
+fn process_data(data: String) -> Result:
+    if len(data) == 0:
+        return Result(Error("Empty data"))
+    return Result(String("Processed: ", data))
+
+var result = process_data("Hello")
+if result.isa[String]():
+    print("Success:", result[String])
+else:
+    print("Error:", result[Error])
+```
+
 ## Methodology
 Benchmarks were conducted using the Mojo `benchmark` module with `max_runtime_secs=0.5`. Each result represents the mean latency for the specified workload. Values were verified on Sunday, January 11, 2026.
