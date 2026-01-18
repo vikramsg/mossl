@@ -20,19 +20,22 @@ if [ -d "$HOME_DIR/.ssh" ]; then
         
         SSH_CMD="ssh -F $HOME_DIR/.ssh_local/config"
         GIT_EXPORT="export GIT_SSH_COMMAND=\"$SSH_CMD\""
+        SSH_ALIAS="alias ssh=\"$SSH_CMD\""
         
         # Add to .zshrc if not already present
         if ! grep -q "GIT_SSH_COMMAND" "$HOME_DIR/.zshrc" 2>/dev/null; then
-            echo "Adding GIT_SSH_COMMAND to .zshrc" >> $LOG_FILE
+            echo "Adding GIT_SSH_COMMAND and alias to .zshrc" >> $LOG_FILE
             echo "" >> "$HOME_DIR/.zshrc"
             echo "# Added by post-create.sh" >> "$HOME_DIR/.zshrc"
             echo "$GIT_EXPORT" >> "$HOME_DIR/.zshrc"
+            echo "$SSH_ALIAS" >> "$HOME_DIR/.zshrc"
         fi
         
         # Add to .bashrc if not already present
         if ! grep -q "GIT_SSH_COMMAND" "$HOME_DIR/.bashrc" 2>/dev/null; then
-            echo "Adding GIT_SSH_COMMAND to .bashrc" >> $LOG_FILE
+            echo "Adding GIT_SSH_COMMAND and alias to .bashrc" >> $LOG_FILE
             echo "$GIT_EXPORT" >> "$HOME_DIR/.bashrc"
+            echo "$SSH_ALIAS" >> "$HOME_DIR/.bashrc"
         fi
     else
         echo "No SSH config found in $HOME_DIR/.ssh" >> $LOG_FILE
