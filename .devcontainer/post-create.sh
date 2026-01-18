@@ -49,18 +49,31 @@ fi
 # Fix permissions on .pixi directory (in case it's a mounted volume)
 if [ -d ".pixi" ]; then
     echo "Fixing permissions on .pixi directory..." >> $LOG_FILE
-    sudo chown -R vscode:vscode .pixi
+    sudo chown -R vscode:vscode .pixi || true
+fi
+
+# Fix permissions on .local subdirectories surgicaly
+# We avoid recursive chown on the whole .local to prevent host-side permission issues
+if [ -d "$HOME_DIR/.local" ]; then
+    echo "Ensuring surgical permissions for .local subdirectories..." >> $LOG_FILE
+    sudo mkdir -p "$HOME_DIR/.local/state" "$HOME_DIR/.local/share/opencode"
+    sudo chown -R vscode:vscode "$HOME_DIR/.local/state" "$HOME_DIR/.local/share/opencode" || true
 fi
 
 # Install pixi dependencies
 echo "Running pixi install..." >> $LOG_FILE
 pixi install >> $LOG_FILE 2>&1
 
-# Ensure npm prefix is unset to avoid nvm conflicts
-if [ -f "$HOME_DIR/.npmrc" ]; then
-    echo "Cleaning $HOME_DIR/.npmrc..." >> $LOG_FILE
-    sed -i '/prefix=/d' "$HOME_DIR/.npmrc"
-    sed -i '/globalconfig=/d' "$HOME_DIR/.npmrc"
+
+# Surgical credential setup for opencode
+echo "Setting up opencode credentials..." >> $LOG_FILE
+mkdir -p "$HOME_DIR/.local/share/opencode"
+if [ -f "$HOME_DIR/.opencode_staging/auth.json" ]; then
+    cp "$HOME_DIR/.opencode_staging/auth.json" "$HOME_DIR/.local/share/opencode/auth.json"
+    chmod 600 "$HOME_DIR/.local/share/opencode/auth.json"
+    echo "opencode auth.json copied and secured." >> $LOG_FILE
+else
+    echo "Warning: Staged auth.json not found." >> $LOG_FILE
 fi
 
 if command -v npm &> /dev/null; then
