@@ -28,6 +28,8 @@ if [ -d "$HOME_DIR/.ssh_host" ]; then
     # Clean host-specific includes (Colima, etc)
     if [ -f "$HOME_DIR/.ssh_local/config" ]; then
         sed -i '/Include .*.colima.ssh_config/d' "$HOME_DIR/.ssh_local/config"
+        # Update IdentityFile paths to point to ~/.ssh_local instead of ~/.ssh
+        sed -i 's|~/.ssh/|~/.ssh_local/|g' "$HOME_DIR/.ssh_local/config"
     fi
 
     # ADD ALIAS AND GIT COMMAND TO LOCAL ZSHRC
