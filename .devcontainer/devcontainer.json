@@ -13,9 +13,9 @@
     },
     "mounts": [
         "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
-        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh_host,type=bind,consistency=cached",
         "source=${localEnv:HOME}/.claude.json,target=/home/vscode/.claude.json,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.zshrc,target=/home/vscode/.zshrc,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.zshrc,target=/home/vscode/.zshrc_host,type=bind,consistency=cached",
         "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
         "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,consistency=cached",
         "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/vscode/.opencode_staging/auth.json,type=bind,consistency=cached"

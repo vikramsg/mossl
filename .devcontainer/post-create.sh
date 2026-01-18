@@ -6,47 +6,34 @@ echo "Starting post-create.sh at $(date)" > $LOG_FILE
 # Use $HOME instead of ~ for reliability in scripts
 HOME_DIR="/home/vscode"
 
-# Fix SSH permissions for bind-mounted .ssh directory
-if [ -d "$HOME_DIR/.ssh" ]; then
-    echo "SSH directory found. Fixing permissions..." >> $LOG_FILE
-    
-    # Create local ssh config directory
-    mkdir -p "$HOME_DIR/.ssh_local"
-    
-    if [ -f "$HOME_DIR/.ssh/config" ]; then
-        echo "Found SSH config. Copying to local..." >> $LOG_FILE
-        cp "$HOME_DIR/.ssh/config" "$HOME_DIR/.ssh_local/config"
-        chmod 600 "$HOME_DIR/.ssh_local/config"
-        
-        SSH_CMD="ssh -F $HOME_DIR/.ssh_local/config"
-        GIT_EXPORT="export GIT_SSH_COMMAND=\"$SSH_CMD\""
-        SSH_ALIAS="alias ssh=\"$SSH_CMD\""
-        
-        # Add to .zshrc if not already present
-        if ! grep -q "GIT_SSH_COMMAND" "$HOME_DIR/.zshrc" 2>/dev/null; then
-            echo "Adding GIT_SSH_COMMAND and alias to .zshrc" >> $LOG_FILE
-            echo "" >> "$HOME_DIR/.zshrc"
-            echo "# Added by post-create.sh" >> "$HOME_DIR/.zshrc"
-            echo "$GIT_EXPORT" >> "$HOME_DIR/.zshrc"
-            echo "$SSH_ALIAS" >> "$HOME_DIR/.zshrc"
-        fi
-        
-        # Add to .bashrc if not already present
-        if ! grep -q "GIT_SSH_COMMAND" "$HOME_DIR/.bashrc" 2>/dev/null; then
-            echo "Adding GIT_SSH_COMMAND and alias to .bashrc" >> $LOG_FILE
-            echo "$GIT_EXPORT" >> "$HOME_DIR/.bashrc"
-            echo "$SSH_ALIAS" >> "$HOME_DIR/.bashrc"
-        fi
-    else
-        echo "No SSH config found in $HOME_DIR/.ssh" >> $LOG_FILE
-    fi
-    
-    # Keys themselves might have bad permissions if they are bind-mounted
-    # Note: chmod might fail on a read-only bind mount, so we ignore errors
-    echo "Attempting to fix key permissions..." >> $LOG_FILE
-    find "$HOME_DIR/.ssh" -type f -name "id_*" -exec chmod 600 {} + 2>/dev/null || true
+# Surgical setup for .zshrc to avoid host-container mismatch
+if [ -f "$HOME_DIR/.zshrc_host" ]; then
+    echo "Staging .zshrc from host..." >> $LOG_FILE
+    cp "$HOME_DIR/.zshrc_host" "$HOME_DIR/.zshrc"
+    chmod 644 "$HOME_DIR/.zshrc"
 else
-    echo "SSH directory $HOME_DIR/.ssh not found." >> $LOG_FILE
+    echo "No host .zshrc found at $HOME_DIR/.zshrc_host" >> $LOG_FILE
+fi
+
+# Surgical setup for .ssh to avoid UID/GID permission issues
+if [ -d "$HOME_DIR/.ssh_host" ]; then
+    echo "Staging .ssh directory from host..." >> $LOG_FILE
+    mkdir -p "$HOME_DIR/.ssh"
+    cp -r "$HOME_DIR/.ssh_host/." "$HOME_DIR/.ssh/"
+    
+    # Fix permissions surgically for the container user
+    chmod 700 "$HOME_DIR/.ssh"
+    find "$HOME_DIR/.ssh" -type f -exec chmod 600 {} +
+    find "$HOME_DIR/.ssh" -type f -name "*.pub" -exec chmod 644 {} +
+    [ -f "$HOME_DIR/.ssh/known_hosts" ] && chmod 644 "$HOME_DIR/.ssh/known_hosts"
+    
+    # Clean up any host-specific Include directives that might fail in container
+    if [ -f "$HOME_DIR/.ssh/config" ]; then
+        sed -i '/Include .*.colima.ssh_config/d' "$HOME_DIR/.ssh/config"
+    fi
+    echo ".ssh directory staged and permissions fixed." >> $LOG_FILE
+else
+    echo "No host .ssh found at $HOME_DIR/.ssh_host" >> $LOG_FILE
 fi
 
 # Fix permissions on .pixi directory (in case it's a mounted volume)
@@ -55,18 +42,9 @@ if [ -d ".pixi" ]; then
     sudo chown -R vscode:vscode .pixi || true
 fi
 
-# Fix permissions on .local subdirectories surgicaly
-# We avoid recursive chown on the whole .local to prevent host-side permission issues
-if [ -d "$HOME_DIR/.local" ]; then
-    echo "Ensuring surgical permissions for .local subdirectories..." >> $LOG_FILE
-    sudo mkdir -p "$HOME_DIR/.local/state" "$HOME_DIR/.local/share/opencode"
-    sudo chown -R vscode:vscode "$HOME_DIR/.local/state" "$HOME_DIR/.local/share/opencode" || true
-fi
-
 # Install pixi dependencies
 echo "Running pixi install..." >> $LOG_FILE
 pixi install >> $LOG_FILE 2>&1
-
 
 # Surgical credential setup for opencode
 echo "Setting up opencode credentials..." >> $LOG_FILE
